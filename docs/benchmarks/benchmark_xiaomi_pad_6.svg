@@ -1,198 +1,237 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 620" width="100%" height="100%" style="background:#0d1117; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; border-radius:12px; border:1px solid #30363d;">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 760" width="100%" height="100%" style="background:#090d16; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; border-radius:16px; border:1px solid #1e293b;">
   <defs>
-    <!-- Gradients -->
+    <!-- Background subtle mesh/glow -->
+    <radialGradient id="cardGlow" cx="50%" cy="0%" r="60%">
+      <stop offset="0%" stop-color="#1e293b" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#090d16" stop-opacity="1"/>
+    </radialGradient>
+
+    <!-- Store Gradients -->
     <linearGradient id="senzerGrad" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#10b981" />
-      <stop offset="100%" stop-color="#34d399" />
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#34d399"/>
     </linearGradient>
     <linearGradient id="rnGrad" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#3b82f6" />
-      <stop offset="100%" stop-color="#60a5fa" />
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#60a5fa"/>
     </linearGradient>
     <linearGradient id="hiveGrad" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#f59e0b" />
-      <stop offset="100%" stop-color="#fbbf24" />
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
     </linearGradient>
     <linearGradient id="sqliteGrad" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#ef4444" />
-      <stop offset="100%" stop-color="#f87171" />
+      <stop offset="0%" stop-color="#ef4444"/>
+      <stop offset="100%" stop-color="#f87171"/>
     </linearGradient>
 
-    <!-- Glow for senzer -->
-    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="1" stdDeviation="2" flood-color="#10b981" flood-opacity="0.3"/>
+    <filter id="emeraldGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#10b981" flood-opacity="0.35"/>
     </filter>
   </defs>
 
-  <!-- Title & Subtitle -->
-  <text x="36" y="38" fill="#f0f6fc" font-size="18" font-weight="700" letter-spacing="-0.01em">Android Xiaomi Pad 6 Storage Benchmark</text>
-  <text x="36" y="58" fill="#8b949e" font-size="12">1,000 operations · Release mode (Android 14, arm64-v8a) · Lower elapsed time is better</text>
+  <!-- Background Layer -->
+  <rect width="960" height="760" rx="16" fill="url(#cardGlow)"/>
 
-  <!-- Legend -->
-  <g transform="translate(36, 76)">
-    <!-- senzer_mmkv -->
-    <rect x="0" y="0" width="12" height="12" rx="3" fill="url(#senzerGrad)"/>
-    <text x="18" y="10" fill="#f0f6fc" font-size="12" font-weight="600">senzer_mmkv</text>
-
-    <!-- react-native-mmkv -->
-    <rect x="145" y="0" width="12" height="12" rx="3" fill="url(#rnGrad)"/>
-    <text x="163" y="10" fill="#c9d1d9" font-size="12" font-weight="500">react-native-mmkv</text>
-
-    <!-- dartnative_hive -->
-    <rect x="330" y="0" width="12" height="12" rx="3" fill="url(#hiveGrad)"/>
-    <text x="348" y="10" fill="#c9d1d9" font-size="12" font-weight="500">dartnative_hive</text>
-
-    <!-- dartnative_sqlite -->
-    <rect x="495" y="0" width="12" height="12" rx="3" fill="url(#sqliteGrad)"/>
-    <text x="513" y="10" fill="#c9d1d9" font-size="12" font-weight="500">dartnative_sqlite</text>
+  <!-- Header -->
+  <g transform="translate(40, 44)">
+    <text x="0" y="0" fill="#ffffff" font-size="22" font-weight="800" letter-spacing="-0.02em">Storage Benchmark: Xiaomi Pad 6</text>
+    <text x="0" y="24" fill="#94a3b8" font-size="13">1,000 operations · Release mode (Android 14, arm64-v8a) · Median of 7 rounds</text>
+    
+    <!-- Badges in top right -->
+    <g transform="translate(620, -14)">
+      <rect x="0" y="0" width="260" height="34" rx="17" fill="#022c22" stroke="#059669" stroke-width="1.2"/>
+      <circle cx="16" cy="17" r="4" fill="#34d399"/>
+      <text x="28" y="21" fill="#34d399" font-size="12" font-weight="700">senzer_mmkv: Up to 5.3x faster</text>
+    </g>
   </g>
 
-  <!-- Divider -->
-  <line x1="36" y1="102" x2="884" y2="102" stroke="#21262d" stroke-width="1"/>
+  <!-- Clean Legend Bar -->
+  <g transform="translate(40, 94)">
+    <rect x="0" y="0" width="880" height="42" rx="10" fill="#0f172a" stroke="#1e293b" stroke-width="1"/>
+    
+    <g transform="translate(24, 25)">
+      <!-- senzer_mmkv -->
+      <rect x="0" y="-8" width="12" height="12" rx="3" fill="url(#senzerGrad)"/>
+      <text x="20" y="2" fill="#ffffff" font-size="13" font-weight="700">senzer_mmkv</text>
 
-  <!-- ================= SECTION 1: READ BENCHMARKS (Low Latency < 1ms, SQLite in 100ms) ================= -->
-  <g transform="translate(36, 118)">
-    <text x="0" y="14" fill="#58a6ff" font-size="13" font-weight="700" letter-spacing="0.05em">READ LATENCY (1,000 OPS)</text>
-    <text x="215" y="14" fill="#8b949e" font-size="11">Fast memory-mapped &amp; cached reads (ms)</text>
+      <!-- react-native-mmkv -->
+      <rect x="200" y="-8" width="12" height="12" rx="3" fill="url(#rnGrad)"/>
+      <text x="220" y="2" fill="#cbd5e1" font-size="13" font-weight="500">react-native-mmkv</text>
 
-    <!-- Grid lines for Read Scale: 0 to 1.5 ms, width = 450px -> 300px per ms -->
-    <g transform="translate(210, 20)">
-      <line x1="0" y1="0" x2="0" y2="200" stroke="#30363d" stroke-width="1"/>
-      <text x="0" y="214" fill="#484f58" font-size="10" text-anchor="middle">0 ms</text>
+      <!-- dartnative_hive -->
+      <rect x="440" y="-8" width="12" height="12" rx="3" fill="url(#hiveGrad)"/>
+      <text x="460" y="2" fill="#cbd5e1" font-size="13" font-weight="500">dartnative_hive</text>
 
-      <line x1="150" y1="0" x2="150" y2="200" stroke="#21262d" stroke-width="1" stroke-dasharray="3,3"/>
-      <text x="150" y="214" fill="#484f58" font-size="10" text-anchor="middle">0.5 ms</text>
+      <!-- dartnative_sqlite -->
+      <rect x="650" y="-8" width="12" height="12" rx="3" fill="url(#sqliteGrad)"/>
+      <text x="670" y="2" fill="#cbd5e1" font-size="13" font-weight="500">dartnative_sqlite</text>
+    </g>
+  </g>
 
-      <line x1="300" y1="0" x2="300" y2="200" stroke="#21262d" stroke-width="1" stroke-dasharray="3,3"/>
-      <text x="300" y="214" fill="#484f58" font-size="10" text-anchor="middle">1.0 ms</text>
+  <!-- ================= CARD 1: WRITE OPERATIONS (Persistent Storage) ================= -->
+  <g transform="translate(40, 156)">
+    <!-- Container Box -->
+    <rect x="0" y="0" width="880" height="268" rx="14" fill="#0b1120" stroke="#1e293b" stroke-width="1"/>
+    
+    <!-- Title -->
+    <text x="24" y="32" fill="#38bdf8" font-size="14" font-weight="700" letter-spacing="0.04em">WRITE THROUGHPUT &amp; TIME (1,000 OPS)</text>
+    <text x="350" y="32" fill="#64748b" font-size="12">Lower time / higher throughput is better</text>
 
-      <line x1="450" y1="0" x2="450" y2="200" stroke="#21262d" stroke-width="1" stroke-dasharray="3,3"/>
-      <text x="450" y="214" fill="#484f58" font-size="10" text-anchor="middle">1.5 ms</text>
+    <!-- Grid lines (0 to 140 ms scale: 380px available -> ~2.7px per ms) -->
+    <!-- Max = 140 ms -->
+    <g transform="translate(230, 48)">
+      <line x1="0" y1="0" x2="0" y2="190" stroke="#1e293b" stroke-width="1"/>
+      <line x1="125" y1="0" x2="125" y2="190" stroke="#131e33" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="250" y1="0" x2="250" y2="190" stroke="#131e33" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="375" y1="0" x2="375" y2="190" stroke="#131e33" stroke-width="1" stroke-dasharray="3,3"/>
+      <text x="0" y="206" fill="#475569" font-size="10" text-anchor="middle">0 ms</text>
+      <text x="125" y="206" fill="#475569" font-size="10" text-anchor="middle">50 ms</text>
+      <text x="250" y="206" fill="#475569" font-size="10" text-anchor="middle">100 ms</text>
+      <text x="375" y="206" fill="#475569" font-size="10" text-anchor="middle">150 ms</text>
+    </g>
+
+    <!-- 1. String Write -->
+    <g transform="translate(24, 60)">
+      <text x="190" y="36" fill="#f8fafc" font-size="13" font-weight="600" text-anchor="end">String Write</text>
+
+      <!-- senzer: 0.808 ms -> min 6px -->
+      <rect x="206" y="8" width="8" height="11" rx="3" fill="url(#senzerGrad)" filter="url(#emeraldGlow)"/>
+      <text x="222" y="18" fill="#34d399" font-size="11" font-weight="700">0.808 ms <tspan fill="#94a3b8" font-weight="400">· 1,237,624 ops/s</tspan></text>
+      <rect x="520" y="6" width="75" height="16" rx="8" fill="#064e3b"/>
+      <text x="557" y="18" fill="#34d399" font-size="10" font-weight="700" text-anchor="middle">2.0x vs RN</text>
+
+      <!-- RN: 1.637 ms -> 12px -->
+      <rect x="206" y="23" width="12" height="11" rx="3" fill="url(#rnGrad)"/>
+      <text x="226" y="33" fill="#60a5fa" font-size="11" font-weight="500">1.637 ms <tspan fill="#94a3b8" font-weight="400">· 610,920 ops/s</tspan></text>
+
+      <!-- Hive: 87.05 ms -> 217px -->
+      <rect x="206" y="38" width="217" height="11" rx="3" fill="url(#hiveGrad)"/>
+      <text x="432" y="48" fill="#fbbf24" font-size="11" font-weight="500">87.05 ms <tspan fill="#94a3b8" font-weight="400">· 11,488 ops/s (108x slower)</tspan></text>
+
+      <!-- SQLite: 135.80 ms -> 339px -->
+      <rect x="206" y="53" width="339" height="11" rx="3" fill="url(#sqliteGrad)"/>
+      <text x="554" y="63" fill="#f87171" font-size="11" font-weight="500">135.80 ms <tspan fill="#94a3b8" font-weight="400">· 7,364 ops/s (168x slower)</tspan></text>
+    </g>
+
+    <line x1="24" y1="150" x2="856" y2="150" stroke="#162138" stroke-width="1"/>
+
+    <!-- 2. Buffer Write 256B -->
+    <g transform="translate(24, 162)">
+      <text x="190" y="36" fill="#f8fafc" font-size="13" font-weight="600" text-anchor="end">Buffer Write (256B)</text>
+
+      <!-- senzer: 0.817 ms -->
+      <rect x="206" y="8" width="8" height="11" rx="3" fill="url(#senzerGrad)" filter="url(#emeraldGlow)"/>
+      <text x="222" y="18" fill="#34d399" font-size="11" font-weight="700">0.817 ms <tspan fill="#94a3b8" font-weight="400">· 1,223,990 ops/s</tspan></text>
+      <rect x="520" y="6" width="75" height="16" rx="8" fill="#064e3b"/>
+      <text x="557" y="18" fill="#34d399" font-size="10" font-weight="700" text-anchor="middle">2.8x vs RN</text>
+
+      <!-- RN: 2.262 ms -->
+      <rect x="206" y="23" width="14" height="11" rx="3" fill="url(#rnGrad)"/>
+      <text x="228" y="33" fill="#60a5fa" font-size="11" font-weight="500">2.262 ms <tspan fill="#94a3b8" font-weight="400">· 442,009 ops/s</tspan></text>
+
+      <!-- Hive: 75.03 ms -> 187px -->
+      <rect x="206" y="38" width="187" height="11" rx="3" fill="url(#hiveGrad)"/>
+      <text x="402" y="48" fill="#fbbf24" font-size="11" font-weight="500">75.03 ms <tspan fill="#94a3b8" font-weight="400">· 13,328 ops/s (92x slower)</tspan></text>
+
+      <!-- SQLite: 129.42 ms -> 323px -->
+      <rect x="206" y="53" width="323" height="11" rx="3" fill="url(#sqliteGrad)"/>
+      <text x="538" y="63" fill="#f87171" font-size="11" font-weight="500">129.42 ms <tspan fill="#94a3b8" font-weight="400">· 7,727 ops/s (158x slower)</tspan></text>
+    </g>
+  </g>
+
+  <!-- ================= CARD 2: READ OPERATIONS (Memory-Mapped & Cached) ================= -->
+  <g transform="translate(40, 444)">
+    <!-- Container Box -->
+    <rect x="0" y="0" width="880" height="280" rx="14" fill="#0b1120" stroke="#1e293b" stroke-width="1"/>
+    
+    <!-- Title -->
+    <text x="24" y="32" fill="#38bdf8" font-size="14" font-weight="700" letter-spacing="0.04em">READ LATENCY (1,000 OPS)</text>
+    <text x="240" y="32" fill="#64748b" font-size="12">Direct memory-mapped access vs SQLite query execution</text>
+
+    <!-- SQLite Callout on right -->
+    <g transform="translate(670, 16)">
+      <rect x="0" y="0" width="186" height="26" rx="6" fill="#1f151b" stroke="#7f1d1d" stroke-width="1"/>
+      <text x="93" y="17" fill="#f87171" font-size="11" font-weight="600" text-anchor="middle">SQLite Reads: 128 - 175 ms</text>
+    </g>
+
+    <!-- Scale: 0 to 1.5 ms -> 380px (253px per ms) -->
+    <g transform="translate(230, 48)">
+      <line x1="0" y1="0" x2="0" y2="200" stroke="#1e293b" stroke-width="1"/>
+      <line x1="126" y1="0" x2="126" y2="200" stroke="#131e33" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="253" y1="0" x2="253" y2="200" stroke="#131e33" stroke-width="1" stroke-dasharray="3,3"/>
+      <line x1="380" y1="0" x2="380" y2="200" stroke="#131e33" stroke-width="1" stroke-dasharray="3,3"/>
+      <text x="0" y="216" fill="#475569" font-size="10" text-anchor="middle">0 ms</text>
+      <text x="126" y="216" fill="#475569" font-size="10" text-anchor="middle">0.5 ms</text>
+      <text x="253" y="216" fill="#475569" font-size="10" text-anchor="middle">1.0 ms</text>
+      <text x="380" y="216" fill="#475569" font-size="10" text-anchor="middle">1.5 ms</text>
     </g>
 
     <!-- 1. String Read -->
-    <!-- senzer: 0.259 (78px), RN: 0.639 (192px), Hive: 0.191 (57px), SQLite: 174.8 ms (off chart) -->
-    <g transform="translate(0, 24)">
-      <text x="195" y="17" fill="#f0f6fc" font-size="12" font-weight="600" text-anchor="end">String Read</text>
-      <!-- Bars: 210 is origin -->
-      <!-- senzer -->
-      <rect x="210" y="2" width="78" height="7" rx="2" fill="url(#senzerGrad)" filter="url(#glow)"/>
-      <text x="294" y="9" fill="#34d399" font-size="10" font-weight="700">0.259 ms</text>
-      <!-- RN -->
-      <rect x="210" y="12" width="192" height="7" rx="2" fill="url(#rnGrad)"/>
-      <text x="408" y="19" fill="#8b949e" font-size="10">0.639 ms</text>
-      <!-- Hive -->
-      <rect x="210" y="22" width="57" height="7" rx="2" fill="url(#hiveGrad)"/>
-      <text x="273" y="29" fill="#e3b341" font-size="10">0.191 ms</text>
-      <!-- SQLite Tag -->
-      <rect x="680" y="8" width="168" height="18" rx="4" fill="#21262d"/>
-      <text x="688" y="21" fill="#f87171" font-size="10">SQLite: 174.8 ms (675x)</text>
+    <g transform="translate(24, 60)">
+      <text x="190" y="21" fill="#f8fafc" font-size="13" font-weight="600" text-anchor="end">String Read</text>
+      <!-- senzer: 0.259 ms -> 65px -->
+      <rect x="206" y="2" width="65" height="10" rx="3" fill="url(#senzerGrad)" filter="url(#emeraldGlow)"/>
+      <text x="278" y="11" fill="#34d399" font-size="11" font-weight="700">0.259 ms</text>
+      <!-- RN: 0.639 ms -> 162px -->
+      <rect x="206" y="15" width="162" height="10" rx="3" fill="url(#rnGrad)"/>
+      <text x="375" y="24" fill="#60a5fa" font-size="11" font-weight="500">0.639 ms</text>
+      <!-- Hive: 0.191 ms -> 48px -->
+      <rect x="206" y="28" width="48" height="10" rx="3" fill="url(#hiveGrad)"/>
+      <text x="261" y="37" fill="#fbbf24" font-size="11" font-weight="500">0.191 ms</text>
+      <!-- Speedup badge -->
+      <rect x="690" y="12" width="145" height="20" rx="10" fill="#064e3b" stroke="#059669" stroke-width="1"/>
+      <text x="762" y="26" fill="#34d399" font-size="11" font-weight="700" text-anchor="middle">2.5x vs RN (675x SQLite)</text>
     </g>
 
     <!-- 2. Number Read -->
-    <!-- senzer: 0.164 (49px), RN: 0.429 (129px), Hive: 0.328 (98px), SQLite: 150.8 ms -->
-    <g transform="translate(0, 72)">
-      <text x="195" y="17" fill="#f0f6fc" font-size="12" font-weight="600" text-anchor="end">Number Read</text>
-      <rect x="210" y="2" width="49" height="7" rx="2" fill="url(#senzerGrad)" filter="url(#glow)"/>
-      <text x="265" y="9" fill="#34d399" font-size="10" font-weight="700">0.164 ms</text>
-      <rect x="210" y="12" width="129" height="7" rx="2" fill="url(#rnGrad)"/>
-      <text x="345" y="19" fill="#8b949e" font-size="10">0.429 ms</text>
-      <rect x="210" y="22" width="98" height="7" rx="2" fill="url(#hiveGrad)"/>
-      <text x="314" y="29" fill="#e3b341" font-size="10">0.328 ms</text>
-      <rect x="680" y="8" width="168" height="18" rx="4" fill="#21262d"/>
-      <text x="688" y="21" fill="#f87171" font-size="10">SQLite: 150.8 ms (920x)</text>
+    <g transform="translate(24, 110)">
+      <text x="190" y="21" fill="#f8fafc" font-size="13" font-weight="600" text-anchor="end">Number Read</text>
+      <!-- senzer: 0.164 ms -> 41px -->
+      <rect x="206" y="2" width="41" height="10" rx="3" fill="url(#senzerGrad)" filter="url(#emeraldGlow)"/>
+      <text x="254" y="11" fill="#34d399" font-size="11" font-weight="700">0.164 ms</text>
+      <!-- RN: 0.429 ms -> 108px -->
+      <rect x="206" y="15" width="108" height="10" rx="3" fill="url(#rnGrad)"/>
+      <text x="321" y="24" fill="#60a5fa" font-size="11" font-weight="500">0.429 ms</text>
+      <!-- Hive: 0.328 ms -> 83px -->
+      <rect x="206" y="28" width="83" height="10" rx="3" fill="url(#hiveGrad)"/>
+      <text x="296" y="37" fill="#fbbf24" font-size="11" font-weight="500">0.328 ms</text>
+      <!-- Speedup badge -->
+      <rect x="690" y="12" width="145" height="20" rx="10" fill="#064e3b" stroke="#059669" stroke-width="1"/>
+      <text x="762" y="26" fill="#34d399" font-size="11" font-weight="700" text-anchor="middle">2.6x vs RN (920x SQLite)</text>
     </g>
 
     <!-- 3. Boolean Read -->
-    <!-- senzer: 0.119 (36px), RN: 0.313 (94px), Hive: 0.245 (74px), SQLite: 128.0 ms -->
-    <g transform="translate(0, 120)">
-      <text x="195" y="17" fill="#f0f6fc" font-size="12" font-weight="600" text-anchor="end">Boolean Read</text>
-      <rect x="210" y="2" width="36" height="7" rx="2" fill="url(#senzerGrad)" filter="url(#glow)"/>
-      <text x="252" y="9" fill="#34d399" font-size="10" font-weight="700">0.119 ms</text>
-      <rect x="210" y="12" width="94" height="7" rx="2" fill="url(#rnGrad)"/>
-      <text x="310" y="19" fill="#8b949e" font-size="10">0.313 ms</text>
-      <rect x="210" y="22" width="74" height="7" rx="2" fill="url(#hiveGrad)"/>
-      <text x="290" y="29" fill="#e3b341" font-size="10">0.245 ms</text>
-      <rect x="680" y="8" width="168" height="18" rx="4" fill="#21262d"/>
-      <text x="688" y="21" fill="#f87171" font-size="10">SQLite: 128.0 ms (1,076x)</text>
+    <g transform="translate(24, 160)">
+      <text x="190" y="21" fill="#f8fafc" font-size="13" font-weight="600" text-anchor="end">Boolean Read</text>
+      <!-- senzer: 0.119 ms -> 30px -->
+      <rect x="206" y="2" width="30" height="10" rx="3" fill="url(#senzerGrad)" filter="url(#emeraldGlow)"/>
+      <text x="243" y="11" fill="#34d399" font-size="11" font-weight="700">0.119 ms</text>
+      <!-- RN: 0.313 ms -> 79px -->
+      <rect x="206" y="15" width="79" height="10" rx="3" fill="url(#rnGrad)"/>
+      <text x="292" y="24" fill="#60a5fa" font-size="11" font-weight="500">0.313 ms</text>
+      <!-- Hive: 0.245 ms -> 62px -->
+      <rect x="206" y="28" width="62" height="10" rx="3" fill="url(#hiveGrad)"/>
+      <text x="275" y="37" fill="#fbbf24" font-size="11" font-weight="500">0.245 ms</text>
+      <!-- Speedup badge -->
+      <rect x="690" y="12" width="145" height="20" rx="10" fill="#064e3b" stroke="#059669" stroke-width="1"/>
+      <text x="762" y="26" fill="#34d399" font-size="11" font-weight="700" text-anchor="middle">2.6x vs RN (1,076x SQLite)</text>
     </g>
 
     <!-- 4. Buffer Read 256B -->
-    <!-- senzer: 0.248 (74px), RN: 1.325 (398px), Hive: 0.256 (77px), SQLite: 130.5 ms -->
-    <g transform="translate(0, 168)">
-      <text x="195" y="17" fill="#f0f6fc" font-size="12" font-weight="600" text-anchor="end">Buffer Read 256B</text>
-      <rect x="210" y="2" width="74" height="7" rx="2" fill="url(#senzerGrad)" filter="url(#glow)"/>
-      <text x="290" y="9" fill="#34d399" font-size="10" font-weight="700">0.248 ms</text>
-      <rect x="210" y="12" width="398" height="7" rx="2" fill="url(#rnGrad)"/>
-      <text x="614" y="19" fill="#8b949e" font-size="10">1.325 ms (5.3x)</text>
-      <rect x="210" y="22" width="77" height="7" rx="2" fill="url(#hiveGrad)"/>
-      <text x="293" y="29" fill="#e3b341" font-size="10">0.256 ms</text>
-      <rect x="680" y="8" width="168" height="18" rx="4" fill="#21262d"/>
-      <text x="688" y="21" fill="#f87171" font-size="10">SQLite: 130.5 ms (526x)</text>
-    </g>
-  </g>
-
-  <!-- Divider -->
-  <line x1="36" y1="364" x2="884" y2="364" stroke="#21262d" stroke-width="1"/>
-
-  <!-- ================= SECTION 2: WRITE BENCHMARKS (Persistent Writes) ================= -->
-  <!-- We show all 4 stores on a log-scaled / normalized comparison bar to showcase the massive difference -->
-  <g transform="translate(36, 380)">
-    <text x="0" y="14" fill="#58a6ff" font-size="13" font-weight="700" letter-spacing="0.05em">WRITE LATENCY &amp; THROUGHPUT (1,000 OPS)</text>
-    <text x="310" y="14" fill="#8b949e" font-size="11">MMKV mmap (sub-millisecond) vs Disk/DB files (ms)</text>
-
-    <!-- Operations: String Write & Buffer Write 256B with all 4 stores -->
-    
-    <!-- String Write -->
-    <g transform="translate(0, 30)">
-      <text x="195" y="17" fill="#f0f6fc" font-size="12" font-weight="600" text-anchor="end">String Write</text>
-      
-      <!-- senzer: 0.808 ms · 1.24M ops/s (width scale: max SQLite = 140ms -> map across 470px) -->
-      <!-- Visual representation using direct comparison bars -->
-      <g transform="translate(210, 0)">
-        <!-- senzer_mmkv -->
-        <rect x="0" y="0" width="12" height="10" rx="2" fill="url(#senzerGrad)" filter="url(#glow)"/>
-        <text x="18" y="9" fill="#34d399" font-size="11" font-weight="700">0.808 ms <tspan fill="#8b949e" font-weight="400">(1,237,624 ops/s)</tspan></text>
-        <rect x="330" y="-1" width="84" height="14" rx="7" fill="#064e3b"/>
-        <text x="372" y="10" fill="#34d399" font-size="9" font-weight="700" text-anchor="middle">2.03x vs RN</text>
-
-        <!-- react-native-mmkv -->
-        <rect x="0" y="14" width="24" height="10" rx="2" fill="url(#rnGrad)"/>
-        <text x="30" y="23" fill="#60a5fa" font-size="11" font-weight="600">1.637 ms <tspan fill="#8b949e" font-weight="400">(610,920 ops/s)</tspan></text>
-
-        <!-- dartnative_hive -->
-        <rect x="0" y="28" width="280" height="10" rx="2" fill="url(#hiveGrad)"/>
-        <text x="288" y="37" fill="#fbbf24" font-size="11" font-weight="600">87.05 ms <tspan fill="#8b949e" font-weight="400">(11,488 ops/s · 108x slower)</tspan></text>
-
-        <!-- dartnative_sqlite -->
-        <rect x="0" y="42" width="440" height="10" rx="2" fill="url(#sqliteGrad)"/>
-        <text x="448" y="51" fill="#f87171" font-size="11" font-weight="600">135.80 ms <tspan fill="#8b949e" font-weight="400">(7,364 ops/s · 168x slower)</tspan></text>
-      </g>
-    </g>
-
-    <!-- Buffer Write 256B -->
-    <g transform="translate(0, 110)">
-      <text x="195" y="17" fill="#f0f6fc" font-size="12" font-weight="600" text-anchor="end">Buffer Write 256B</text>
-      
-      <g transform="translate(210, 0)">
-        <!-- senzer_mmkv -->
-        <rect x="0" y="0" width="12" height="10" rx="2" fill="url(#senzerGrad)" filter="url(#glow)"/>
-        <text x="18" y="9" fill="#34d399" font-size="11" font-weight="700">0.817 ms <tspan fill="#8b949e" font-weight="400">(1,223,990 ops/s)</tspan></text>
-        <rect x="330" y="-1" width="84" height="14" rx="7" fill="#064e3b"/>
-        <text x="372" y="10" fill="#34d399" font-size="9" font-weight="700" text-anchor="middle">2.77x vs RN</text>
-
-        <!-- react-native-mmkv -->
-        <rect x="0" y="14" width="33" height="10" rx="2" fill="url(#rnGrad)"/>
-        <text x="40" y="23" fill="#60a5fa" font-size="11" font-weight="600">2.262 ms <tspan fill="#8b949e" font-weight="400">(442,009 ops/s)</tspan></text>
-
-        <!-- dartnative_hive -->
-        <rect x="0" y="28" width="245" height="10" rx="2" fill="url(#hiveGrad)"/>
-        <text x="253" y="37" fill="#fbbf24" font-size="11" font-weight="600">75.03 ms <tspan fill="#8b949e" font-weight="400">(13,328 ops/s · 92x slower)</tspan></text>
-
-        <!-- dartnative_sqlite -->
-        <rect x="0" y="42" width="420" height="10" rx="2" fill="url(#sqliteGrad)"/>
-        <text x="428" y="51" fill="#f87171" font-size="11" font-weight="600">129.42 ms <tspan fill="#8b949e" font-weight="400">(7,727 ops/s · 158x slower)</tspan></text>
-      </g>
+    <g transform="translate(24, 210)">
+      <text x="190" y="21" fill="#f8fafc" font-size="13" font-weight="600" text-anchor="end">Buffer Read 256B</text>
+      <!-- senzer: 0.248 ms -> 63px -->
+      <rect x="206" y="2" width="63" height="10" rx="3" fill="url(#senzerGrad)" filter="url(#emeraldGlow)"/>
+      <text x="276" y="11" fill="#34d399" font-size="11" font-weight="700">0.248 ms</text>
+      <!-- RN: 1.325 ms -> 335px -->
+      <rect x="206" y="15" width="335" height="10" rx="3" fill="url(#rnGrad)"/>
+      <text x="548" y="24" fill="#60a5fa" font-size="11" font-weight="500">1.325 ms</text>
+      <!-- Hive: 0.256 ms -> 65px -->
+      <rect x="206" y="28" width="65" height="10" rx="3" fill="url(#hiveGrad)"/>
+      <text x="278" y="37" fill="#fbbf24" font-size="11" font-weight="500">0.256 ms</text>
+      <!-- Speedup badge -->
+      <rect x="690" y="12" width="145" height="20" rx="10" fill="#064e3b" stroke="#059669" stroke-width="1"/>
+      <text x="762" y="26" fill="#34d399" font-size="11" font-weight="700" text-anchor="middle">5.3x vs RN (526x SQLite)</text>
     </g>
   </g>
 </svg>
