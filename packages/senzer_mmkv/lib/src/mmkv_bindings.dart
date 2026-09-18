@@ -200,6 +200,8 @@ abstract final class SenzerMMKVBindings {
   static late final _SetDefaultPathDart setDefaultPath;
   static late final _FreeDart free;
   static late final _LastErrorDart lastError;
+  static late final _SetStringDart profileNoop;
+  static late final _SetStringDart profileValidate;
   static late final Pointer<NativeFunction<_DestroyNative>> destroyPointer;
 
   static bool get isSupportedPlatform => Platform.isIOS || Platform.isAndroid;
@@ -314,6 +316,12 @@ abstract final class SenzerMMKVBindings {
     free = library.lookupFunction<_FreeNative, _FreeDart>('DNMMKVFree');
     lastError = library.lookupFunction<_LastErrorNative, _LastErrorDart>(
       'DNMMKVLastError',
+    );
+    profileNoop = library.lookupFunction<_SetStringNative, _SetStringDart>(
+      'DNMMKVProfileNoop',
+    );
+    profileValidate = library.lookupFunction<_SetStringNative, _SetStringDart>(
+      'DNMMKVProfileValidate',
     );
     _finalizer = NativeFinalizer(destroyPointer);
     if (Platform.isIOS) {

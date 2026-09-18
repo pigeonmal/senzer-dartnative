@@ -15,6 +15,17 @@ extern "C" {
 
 typedef void* DNMMKVHandle;
 
+enum DNMMKVStatus {
+  kDNMMKVOk = 0,
+  kDNMMKVMissing = 1,
+  kDNMMKVWrongType = 2,
+  kDNMMKVOkAscii = 3,
+  kDNMMKVInvalidArgument = -1,
+  kDNMMKVIoError = -2,
+  kDNMMKVReadOnly = -3,
+  kDNMMKVBufferTooSmall = -4,
+};
+
 DNMMKV_EXPORT DNMMKVHandle DNMMKVCreate(const uint8_t* id, size_t id_len,
                                         const uint8_t* root_path, size_t root_path_len,
                                         const uint8_t* encryption_key, size_t encryption_key_len,
@@ -87,6 +98,10 @@ DNMMKV_EXPORT int32_t DNMMKVDelete(const uint8_t* id, size_t id_len, const uint8
 DNMMKV_EXPORT int32_t DNMMKVSetDefaultRootPath(const uint8_t* path, size_t path_len);
 DNMMKV_EXPORT const char* DNMMKVLastError(void);
 DNMMKV_EXPORT void DNMMKVFree(void* pointer);
+DNMMKV_EXPORT int32_t DNMMKVProfileNoop(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
+                                        const uint8_t* val, size_t val_len);
+DNMMKV_EXPORT int32_t DNMMKVProfileValidate(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
+                                            const uint8_t* val, size_t val_len);
 
 #if defined(__cplusplus)
 }

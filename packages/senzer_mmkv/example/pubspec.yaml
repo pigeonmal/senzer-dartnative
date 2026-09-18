@@ -12,6 +12,7 @@ dependencies:
   dartnative_android: ^1.0.0
   dartnative_hive: ^1.0.0
   dartnative_sqlite: ^1.0.0
+  ffi: ^2.1.0
   senzer_mmkv:
     path: ..
 

@@ -30,14 +30,14 @@ comparison libraries do not expose the same encryption contract.
 
 | Store | Case | Median elapsed for 1,000 ops (ms) | Median ops/s |
 | --- | --- | ---: | ---: |
-| `senzer_mmkv` | string write | 0.817 | 1,223,990.208 |
-| `senzer_mmkv` | string read | 0.295 | 3,389,830.508 |
-| `senzer_mmkv` | number write | 0.765 | 1,307,189.542 |
-| `senzer_mmkv` | number read | 0.156 | 6,410,256.410 |
-| `senzer_mmkv` | boolean write | 0.748 | 1,336,898.396 |
-| `senzer_mmkv` | boolean read | 0.118 | 8,474,576.271 |
-| `senzer_mmkv` | buffer write 256B | 0.804 | 1,243,781.095 |
-| `senzer_mmkv` | buffer read 256B | 0.215 | 4,651,162.791 |
+| `senzer_mmkv` | string write | 0.808 | 1,237,623.762 |
+| `senzer_mmkv` | string read | 0.259 | 3,861,003.861 |
+| `senzer_mmkv` | number write | 0.770 | 1,298,701.299 |
+| `senzer_mmkv` | number read | 0.164 | 6,097,560.976 |
+| `senzer_mmkv` | boolean write | 0.761 | 1,314,060.447 |
+| `senzer_mmkv` | boolean read | 0.119 | 8,403,361.345 |
+| `senzer_mmkv` | buffer write 256B | 0.817 | 1,223,990.208 |
+| `senzer_mmkv` | buffer read 256B | 0.248 | 4,032,258.065 |
 | `dartnative_hive` | string write | 87.049 | 11,487.783 |
 | `dartnative_hive` | string read | 0.191 | 5,235,602.094 |
 | `dartnative_hive` | number write | 66.011 | 15,148.990 |

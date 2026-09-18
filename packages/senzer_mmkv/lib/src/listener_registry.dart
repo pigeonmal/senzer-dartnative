@@ -23,6 +23,12 @@ final class MMKVListenerRegistry {
   /// exists anywhere in the isolate.
   static bool get hasAnyListeners => _listenersByScope.isNotEmpty;
 
+  /// Returns true if any listeners are registered for [scope].
+  static bool hasListenersForScope(String scope) {
+    final listeners = _listenersByScope[scope];
+    return listeners != null && listeners.isNotEmpty;
+  }
+
   /// Produces a stable key for one storage file without conflating custom
   /// roots that happen to use the same MMKV id.
   static String scopeFor({required String id, String? path}) =>

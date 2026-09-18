@@ -3,6 +3,7 @@ import 'package:dartnative/dartnative.dart';
 import 'dartnative_plugin_registrant.dart';
 import 'integration_tests.dart';
 import 'benchmarks/comparison_benchmark.dart';
+import 'benchmarks/path_profiler.dart';
 
 void main() {
   // This must be the first application call so the MMKV FFI symbols and
@@ -52,6 +53,18 @@ final class _MMKVExampleAppState extends State<MMKVExampleApp> {
             (row) =>
                 '  ${row.name}: ${row.elapsedMs.toStringAsFixed(3)} ms, ${row.opsPerSecond.toStringAsFixed(3)} ops/s',
           ),
+        );
+      }
+    });
+
+    final profileStages = await runPathProfiler();
+    if (!mounted) return;
+    setState(() {
+      _lines.add('');
+      _lines.add('Path Profiler (1,000 operations, median):');
+      for (final stage in profileStages) {
+        _lines.add(
+          '  Stage ${stage.stageNumber}: ${stage.name} -> ${stage.elapsedMs.toStringAsFixed(3)} ms (${stage.nanosPerOp.toStringAsFixed(1)} ns/op)',
         );
       }
       _status = 'ALL PASS (${report.passedChecks.length} checks)';

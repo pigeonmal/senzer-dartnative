@@ -15,7 +15,7 @@ final class NativeByteScratch {
 
   static final Finalizer<Pointer<Uint8>> _finalizer = Finalizer<Pointer<Uint8>>(
     (pointer) {
-      if (pointer != nullptr) calloc.free(pointer);
+      if (pointer != nullptr) malloc.free(pointer);
     },
   );
 
@@ -38,32 +38,44 @@ final class NativeByteScratch {
   int writeUtf8(String value) {
     // Encode directly into the reusable native block. This avoids allocating
     // a temporary Dart byte list for every key/value string operation.
-    final maximumBytes = value.length * 4;
+    final length = value.length;
+    final maximumBytes = length * 4;
     ensureCapacity(maximumBytes == 0 ? 1 : maximumBytes);
     final output = _bytes;
-    var offset = 0;
-    for (var index = 0; index < value.length; index++) {
+    var index = 0;
+    // Tight ASCII fast-path: the overwhelming majority of keys and standard
+    // string values are pure ASCII. This tight loop avoids 4-way cascading branches.
+    while (index < length) {
+      final codeUnit = value.codeUnitAt(index);
+      if (codeUnit > 0x7f) break;
+      output[index] = codeUnit;
+      index++;
+    }
+    if (index == length) return length;
+
+    var offset = index;
+    for (; index < length; index++) {
       var codeUnit = value.codeUnitAt(index);
       if (codeUnit <= 0x7f) {
         output[offset++] = codeUnit;
       } else if (codeUnit <= 0x7ff) {
         output[offset++] = 0xc0 | (codeUnit >> 6);
         output[offset++] = 0x80 | (codeUnit & 0x3f);
-      } else if (codeUnit >= 0xd800 &&
-          codeUnit <= 0xdbff &&
-          index + 1 < value.length) {
-        final low = value.codeUnitAt(index + 1);
-        if (low >= 0xdc00 && low <= 0xdfff) {
-          final codePoint =
-              0x10000 + ((codeUnit - 0xd800) << 10) + (low - 0xdc00);
-          output[offset++] = 0xf0 | (codePoint >> 18);
-          output[offset++] = 0x80 | ((codePoint >> 12) & 0x3f);
-          output[offset++] = 0x80 | ((codePoint >> 6) & 0x3f);
-          output[offset++] = 0x80 | (codePoint & 0x3f);
-          index++;
-        } else {
-          offset = _writeReplacement(output, offset);
+      } else if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+        if (index + 1 < length) {
+          final low = value.codeUnitAt(index + 1);
+          if (low >= 0xdc00 && low <= 0xdfff) {
+            final codePoint =
+                0x10000 + ((codeUnit - 0xd800) << 10) + (low - 0xdc00);
+            output[offset++] = 0xf0 | (codePoint >> 18);
+            output[offset++] = 0x80 | ((codePoint >> 12) & 0x3f);
+            output[offset++] = 0x80 | ((codePoint >> 6) & 0x3f);
+            output[offset++] = 0x80 | (codePoint & 0x3f);
+            index++;
+            continue;
+          }
         }
+        offset = _writeReplacement(output, offset);
       } else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
         offset = _writeReplacement(output, offset);
       } else {
@@ -105,7 +117,7 @@ final class NativeByteScratch {
   void dispose() {
     _finalizer.detach(this);
     if (_pointer != nullptr) {
-      calloc.free(_pointer);
+      malloc.free(_pointer);
       _pointer = nullptr;
       _capacity = 0;
       _bytes = Uint8List(0);
@@ -114,8 +126,8 @@ final class NativeByteScratch {
 
   void _replace(int capacity) {
     _finalizer.detach(this);
-    if (_pointer != nullptr) calloc.free(_pointer);
-    _pointer = calloc<Uint8>(capacity);
+    if (_pointer != nullptr) malloc.free(_pointer);
+    _pointer = malloc<Uint8>(capacity);
     _capacity = capacity;
     _bytes = _pointer.asTypedList(capacity);
     _finalizer.attach(this, _pointer, detach: this);

@@ -104,7 +104,7 @@ were taken in release mode on an **Android Xiaomi Pad 6** (Android 14,
 
 | Store | String write | String read |
 | --- | ---: | ---: |
-| `senzer_mmkv` | 1,223,990 ops/s · 0.817 ms | 3,389,831 ops/s · 0.295 ms |
+| `senzer_mmkv` | 1,237,624 ops/s · 0.808 ms | 3,861,004 ops/s · 0.259 ms |
 | `react-native-mmkv` | 610,920 ops/s · 1.637 ms | 1,564,284 ops/s · 0.639 ms |
 | `dartnative_hive` | 11,488 ops/s · 87.049 ms | 5,235,602 ops/s · 0.191 ms |
 | `dartnative_sqlite` | 7,364 ops/s · 135.801 ms | 5,720 ops/s · 174.818 ms |

@@ -42,4 +42,16 @@ void main() {
     MMKVListenerRegistry.remove(first);
     MMKVListenerRegistry.remove(second);
   });
+
+  test('reports hasListenersForScope correctly', () {
+    const scope = 'scope-query-test';
+    expect(MMKVListenerRegistry.hasListenersForScope(scope), isFalse);
+
+    final registration = MMKVListenerRegistry.add(scope, (_) {});
+    expect(MMKVListenerRegistry.hasListenersForScope(scope), isTrue);
+    expect(MMKVListenerRegistry.hasListenersForScope('unrelated-scope'), isFalse);
+
+    MMKVListenerRegistry.remove(registration);
+    expect(MMKVListenerRegistry.hasListenersForScope(scope), isFalse);
+  });
 }

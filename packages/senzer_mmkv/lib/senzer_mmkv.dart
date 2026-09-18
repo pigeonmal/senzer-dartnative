@@ -9,6 +9,7 @@ import 'src/mmkv_bindings.dart';
 import 'src/native_scratch.dart';
 
 export 'src/mmkv_bindings.dart' show SenzerMMKVBindings;
+export 'src/native_scratch.dart' show NativeByteScratch, NativeScalarScratch;
 
 /// Storage mode used by MMKV instances.
 enum MMKVMode { singleProcess, multiProcess }
@@ -154,6 +155,10 @@ final class MMKV implements Finalizable {
   }
 
   bool get isClosed => _handle == nullptr;
+  Pointer<Void> get nativeHandle => _handle;
+  NativeByteScratch get keyScratch => _keyScratch;
+  NativeByteScratch get valueScratch => _valueScratch;
+  NativeScalarScratch get scalarScratch => _scalarScratch;
 
   void _ensureOpen() {
     if (isClosed) throw StateError('MMKV instance "$id" is already closed.');
@@ -175,36 +180,80 @@ final class MMKV implements Finalizable {
   }
 
   void set(String key, Object value) {
+    switch (value) {
+      case String text:
+        setString(key, text);
+      case bool boolean:
+        setBoolean(key, boolean);
+      case double d:
+        setNumber(key, d);
+      case int i:
+        setNumber(key, i);
+      case Uint8List buffer:
+        setBuffer(key, buffer);
+      case List<int> buffer:
+        setBuffer(key, Uint8List.fromList(buffer));
+      default:
+        throw ArgumentError.value(
+          value,
+          'value',
+          'must be String, bool, num, or Uint8List',
+        );
+    }
+  }
+
+  /// Stores a UTF-8 string value directly without polymorphic dispatch.
+  void setString(String key, String value) {
     _ensureOpen();
     final keyLength = _prepareKey(key);
     final keyPointer = _keyScratch.pointer;
-    final status = switch (value) {
-      String text => _setString(keyPointer, keyLength, text),
-      bool boolean => SenzerMMKVBindings.setBoolean(
+    _runStatus(_setString(keyPointer, keyLength, value), 'setString');
+    _notify(key);
+  }
+
+  /// Stores a boolean value directly without polymorphic dispatch.
+  void setBoolean(String key, bool value) {
+    _ensureOpen();
+    final keyLength = _prepareKey(key);
+    final keyPointer = _keyScratch.pointer;
+    _runStatus(
+      SenzerMMKVBindings.setBoolean(
         _handle,
         keyPointer,
         keyLength,
-        boolean ? 1 : 0,
+        value ? 1 : 0,
       ),
-      num number => SenzerMMKVBindings.setNumber(
+      'setBoolean',
+    );
+    _notify(key);
+  }
+
+  /// Stores a floating-point or integer number without polymorphic dispatch.
+  void setNumber(String key, num value) {
+    _ensureOpen();
+    final keyLength = _prepareKey(key);
+    final keyPointer = _keyScratch.pointer;
+    _runStatus(
+      SenzerMMKVBindings.setNumber(
         _handle,
         keyPointer,
         keyLength,
-        number.toDouble(),
+        value.toDouble(),
       ),
-      Uint8List buffer => _setBuffer(keyPointer, keyLength, buffer),
-      List<int> buffer => _setBuffer(
-        keyPointer,
-        keyLength,
-        Uint8List.fromList(buffer),
-      ),
-      _ => throw ArgumentError.value(
-        value,
-        'value',
-        'must be String, bool, num, or Uint8List',
-      ),
-    };
-    _runStatus(status, 'set');
+      'setNumber',
+    );
+    _notify(key);
+  }
+
+  /// Direct alias for [setNumber] with double values.
+  void setDouble(String key, double value) => setNumber(key, value);
+
+  /// Stores binary data directly without polymorphic dispatch.
+  void setBuffer(String key, Uint8List value) {
+    _ensureOpen();
+    final keyLength = _prepareKey(key);
+    final keyPointer = _keyScratch.pointer;
+    _runStatus(_setBuffer(keyPointer, keyLength, value), 'setBuffer');
     _notify(key);
   }
 
@@ -262,20 +311,14 @@ final class MMKV implements Finalizable {
       length,
     );
     if (status == 1 || status == 2) return null;
-    _runStatus(status, 'getString');
-    if (length.value == 0) return '';
-    final bytes = _scalarScratch.pointerValue.value.asTypedList(length.value);
-    // Most storage keys/values are ASCII. Avoid the UTF-8 validator and
-    // decoder machinery for that common case while retaining full UTF-8
-    // support for non-ASCII values.
-    var ascii = true;
-    for (final byte in bytes) {
-      if (byte >= 0x80) {
-        ascii = false;
-        break;
-      }
-    }
-    return ascii ? String.fromCharCodes(bytes) : utf8.decode(bytes);
+    if (status < 0) _runStatus(status, 'getString');
+    final byteLength = length.value;
+    if (byteLength == 0) return '';
+    final bytes = _scalarScratch.pointerValue.value.asTypedList(byteLength);
+    // When C++ signals kOkAscii (3), the native string is guaranteed 7-bit
+    // ASCII. Direct String.fromCharCodes runs in ~17ns without scanning or
+    // invoking the UTF-8 decoder. Non-ASCII falls back to utf8.decode.
+    return status == 3 ? String.fromCharCodes(bytes) : utf8.decode(bytes);
   }
 
   double? getNumber(String key) {
@@ -342,10 +385,37 @@ final class MMKV implements Finalizable {
     );
     if (status == 1 || status == 2) return null;
     _runStatus(status, 'getBuffer');
-    if (length.value == 0) return Uint8List(0);
-    return Uint8List.fromList(
-      _scalarScratch.pointerValue.value.asTypedList(length.value),
+    final byteLength = length.value;
+    if (byteLength == 0) return Uint8List(0);
+    final source = _scalarScratch.pointerValue.value.asTypedList(byteLength);
+    final target = Uint8List(byteLength);
+    target.setRange(0, byteLength, source);
+    return target;
+  }
+
+  /// Reads binary data into caller-owned [target] without heap allocations.
+  /// Returns the number of bytes written, or `null` if the key is missing or
+  /// stores a different type.
+  int? getBufferInto(String key, Uint8List target) {
+    _ensureOpen();
+    final keyLength = _prepareKey(key);
+    final keyPointer = _keyScratch.pointer;
+    _valueScratch.ensureCapacity(target.isEmpty ? 1 : target.length);
+    final status = SenzerMMKVBindings.getBufferInto(
+      _handle,
+      keyPointer,
+      keyLength,
+      _valueScratch.pointer,
+      target.length,
+      _scalarScratch.size,
     );
+    if (status == 1 || status == 2) return null;
+    _runStatus(status, 'getBufferInto');
+    final written = _scalarScratch.size.value;
+    if (written > 0) {
+      target.setRange(0, written, _valueScratch.view(written));
+    }
+    return written;
   }
 
   bool contains(String key) {
@@ -367,24 +437,36 @@ final class MMKV implements Finalizable {
         'getAllKeys',
       );
       final bytes = output.value.asTypedList(outputLength.value);
+      final byteData = ByteData.sublistView(bytes);
       final keys = <String>[];
       var offset = 0;
-      while (offset < bytes.length) {
-        if (bytes.length - offset < 8) {
+      final totalLength = bytes.length;
+      while (offset < totalLength) {
+        if (totalLength - offset < 8) {
           throw const MMKVException('Native key list is truncated.');
         }
-        final keyLength = ByteData.sublistView(
-          bytes,
-          offset,
-          offset + 8,
-        ).getUint64(0, Endian.host);
+        final keyLength = byteData.getUint64(offset, Endian.host);
         offset += 8;
-        if (keyLength > bytes.length - offset) {
+        if (keyLength > totalLength - offset) {
           throw const MMKVException(
             'Native key list contains an invalid length.',
           );
         }
-        keys.add(utf8.decode(bytes.sublist(offset, offset + keyLength)));
+        final keyBytes = Uint8List.sublistView(
+          bytes,
+          offset,
+          offset + keyLength,
+        );
+        var ascii = true;
+        for (var i = 0; i < keyBytes.length; i++) {
+          if (keyBytes[i] >= 0x80) {
+            ascii = false;
+            break;
+          }
+        }
+        keys.add(
+          ascii ? String.fromCharCodes(keyBytes) : utf8.decode(keyBytes),
+        );
         offset += keyLength;
       }
       return keys;
@@ -418,10 +500,14 @@ final class MMKV implements Finalizable {
   void clearAll() {
     _ensureOpen();
     if (isReadOnly) return;
-    final oldKeys = getAllKeys();
+    final shouldNotify =
+        MMKVListenerRegistry.hasListenersForScope(_listenerScope);
+    final oldKeys = shouldNotify ? getAllKeys() : null;
     _runStatus(SenzerMMKVBindings.clear(_handle), 'clearAll');
-    for (final key in oldKeys) {
-      _notify(key);
+    if (oldKeys != null) {
+      for (final key in oldKeys) {
+        _notify(key);
+      }
     }
   }
 
@@ -495,7 +581,8 @@ final class MMKV implements Finalizable {
       'importAllFrom',
     );
     final count = _scalarScratch.size.value;
-    if (count != 0) {
+    if (count != 0 &&
+        MMKVListenerRegistry.hasListenersForScope(_listenerScope)) {
       for (final key in getAllKeys()) {
         _notify(key);
       }

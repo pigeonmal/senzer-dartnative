@@ -124,6 +124,24 @@ Future<MMKVIntegrationReport> runMMKVIntegrationTests() async {
     check('constructor encryption', aes128.isEncrypted && aes128.getString('string') == null);
     aes128.close();
 
+    final intoTarget = Uint8List(16);
+    final intoWritten = storage.getBufferInto('buffer', intoTarget);
+    check(
+      'getBufferInto caller-owned read',
+      intoWritten == 4 && _same(intoTarget.sublist(0, 4), <int>[0, 1, 2, 255]),
+    );
+    storage.setString('typed-str', 'typed-val');
+    storage.setBoolean('typed-bool', true);
+    storage.setNumber('typed-num', 99.9);
+    storage.setBuffer('typed-buf', Uint8List.fromList(<int>[10, 20]));
+    check(
+      'typed fast-paths round-trip',
+      storage.getString('typed-str') == 'typed-val' &&
+          storage.getBoolean('typed-bool') == true &&
+          storage.getNumber('typed-num') == 99.9 &&
+          _same(storage.getBuffer('typed-buf'), <int>[10, 20]),
+    );
+
     listener.remove();
     storage.clearAll();
     check('clearAll', storage.length == 0 && storage.getAllKeys().isEmpty);
