@@ -5,3 +5,5 @@
   compare-before-set, multi-process refresh, trimming, import, listeners, CRC
   recovery, AES-128/AES-256 encryption, rekey/decrypt, and memory-cache control.
 - Added iOS and Android FFI/JNI packaging.
+- Added exact signed 64-bit Dart integer accessors without changing the
+  JavaScript-compatible double-based `set`/`getNumber` behavior.

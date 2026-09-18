@@ -50,6 +50,9 @@ typedef _SetNumberNative =
     Int32 Function(Pointer<Void>, Pointer<Uint8>, UintPtr, Double);
 typedef _SetNumberDart =
     int Function(Pointer<Void>, Pointer<Uint8>, int, double);
+typedef _SetInt64Native =
+    Int32 Function(Pointer<Void>, Pointer<Uint8>, UintPtr, Int64);
+typedef _SetInt64Dart = int Function(Pointer<Void>, Pointer<Uint8>, int, int);
 typedef _SetBufferNative = _SetStringNative;
 typedef _SetBufferDart = _SetStringDart;
 typedef _GetStringNative =
@@ -76,6 +79,10 @@ typedef _GetNumberNative =
     Int32 Function(Pointer<Void>, Pointer<Uint8>, UintPtr, Pointer<Double>);
 typedef _GetNumberDart =
     int Function(Pointer<Void>, Pointer<Uint8>, int, Pointer<Double>);
+typedef _GetInt64Native =
+    Int32 Function(Pointer<Void>, Pointer<Uint8>, UintPtr, Pointer<Int64>);
+typedef _GetInt64Dart =
+    int Function(Pointer<Void>, Pointer<Uint8>, int, Pointer<Int64>);
 typedef _GetBufferNative = _GetStringNative;
 typedef _GetBufferDart = _GetStringDart;
 typedef _ContainsNative =
@@ -142,10 +149,12 @@ abstract final class SenzerMMKVBindings {
   static late final _SetStringDart setString;
   static late final _SetBooleanDart setBoolean;
   static late final _SetNumberDart setNumber;
+  static late final _SetInt64Dart setInt64;
   static late final _SetBufferDart setBuffer;
   static late final _GetStringDart getString;
   static late final _GetBooleanDart getBoolean;
   static late final _GetNumberDart getNumber;
+  static late final _GetInt64Dart getInt64;
   static late final _GetBufferDart getBuffer;
   static late final _ContainsDart contains;
   static late final _GetKeyCountDart getKeyCount;
@@ -198,6 +207,9 @@ abstract final class SenzerMMKVBindings {
     setNumber = library.lookupFunction<_SetNumberNative, _SetNumberDart>(
       'DNMMKVSetNumber',
     );
+    setInt64 = library.lookupFunction<_SetInt64Native, _SetInt64Dart>(
+      'DNMMKVSetInt64',
+    );
     setBuffer = library.lookupFunction<_SetBufferNative, _SetBufferDart>(
       'DNMMKVSetBuffer',
     );
@@ -209,6 +221,9 @@ abstract final class SenzerMMKVBindings {
     );
     getNumber = library.lookupFunction<_GetNumberNative, _GetNumberDart>(
       'DNMMKVGetNumber',
+    );
+    getInt64 = library.lookupFunction<_GetInt64Native, _GetInt64Dart>(
+      'DNMMKVGetInt64',
     );
     getBuffer = library.lookupFunction<_GetBufferNative, _GetBufferDart>(
       'DNMMKVGetBuffer',

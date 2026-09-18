@@ -276,6 +276,16 @@ int32_t DNMMKVSetNumber(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
   });
 }
 
+int32_t DNMMKVSetInt64(DNMMKVHandle handle, const uint8_t* key, size_t key_len, int64_t input) {
+  return guarded([&] {
+    auto* instance = value(handle);
+    if (instance == nullptr) return kInvalidArgument;
+    const auto key_string = toString(key, key_len);
+    if (key_string.empty()) return kInvalidArgument;
+    return instance->set(input, key_string) ? kOk : writeFailure(instance);
+  });
+}
+
 int32_t DNMMKVSetBuffer(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
                         const uint8_t* input, size_t input_len) {
   return guarded([&] {
@@ -320,6 +330,19 @@ int32_t DNMMKVGetNumber(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
     const auto key_string = toString(key, key_len);
     bool has_value = false;
     const auto result = instance->getDouble(key_string, 0.0, &has_value);
+    const auto status = getKeyStatus(instance, key_string, has_value);
+    if (status == kOk) *output = result;
+    return status;
+  });
+}
+
+int32_t DNMMKVGetInt64(DNMMKVHandle handle, const uint8_t* key, size_t key_len, int64_t* output) {
+  return guarded([&] {
+    auto* instance = value(handle);
+    if (instance == nullptr || output == nullptr) return kInvalidArgument;
+    const auto key_string = toString(key, key_len);
+    bool has_value = false;
+    const auto result = instance->getInt64(key_string, 0, &has_value);
     const auto status = getKeyStatus(instance, key_string, has_value);
     if (status == kOk) *output = result;
     return status;

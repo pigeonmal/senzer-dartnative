@@ -221,6 +221,25 @@ final class MMKV implements Finalizable {
     }
   }
 
+  /// Stores an exact signed 64-bit integer without converting through a
+  /// JavaScript-compatible double.
+  void setInt64(String key, int value) {
+    _ensureOpen();
+    if (value < -0x8000000000000000 || value > 0x7fffffffffffffff) {
+      throw RangeError.range(value, -0x8000000000000000, 0x7fffffffffffffff);
+    }
+    _withKey<void>(key, (keyPointer, keyLength) {
+      _runStatus(
+        SenzerMMKVBindings.setInt64(_handle, keyPointer, keyLength, value),
+        'setInt64',
+      );
+    });
+    _notify(key);
+  }
+
+  /// Dart-friendly alias for [setInt64].
+  void setInt(String key, int value) => setInt64(key, value);
+
   int _setBuffer(Pointer<Uint8> key, int keyLength, Uint8List value) {
     final pointer = SenzerMMKVBindings.allocateBytes(value);
     try {
@@ -282,6 +301,31 @@ final class MMKV implements Finalizable {
       }
     });
   }
+
+  /// Reads an exact signed 64-bit integer, or `null` when the key is absent or
+  /// stores another MMKV value type.
+  int? getInt64(String key) {
+    _ensureOpen();
+    return _withKey<int?>(key, (keyPointer, keyLength) {
+      final output = calloc<Int64>();
+      try {
+        final status = SenzerMMKVBindings.getInt64(
+          _handle,
+          keyPointer,
+          keyLength,
+          output,
+        );
+        if (status == 1 || status == 2) return null;
+        _runStatus(status, 'getInt64');
+        return output.value;
+      } finally {
+        calloc.free(output);
+      }
+    });
+  }
+
+  /// Dart-friendly alias for [getInt64].
+  int? getInt(String key) => getInt64(key);
 
   bool? getBoolean(String key) {
     _ensureOpen();

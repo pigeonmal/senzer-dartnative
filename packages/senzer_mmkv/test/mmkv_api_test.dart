@@ -23,4 +23,11 @@ void main() {
   test('exports explicit root initialization', () {
     expect(initializeMMKV, isA<Function>());
   });
+
+  test('exposes exact Dart integer accessors', () {
+    void setter(MMKV storage, int value) => storage.setInt64('key', value);
+    int? getter(MMKV storage) => storage.getInt64('key');
+    expect(setter, isA<Function>());
+    expect(getter, isA<Function>());
+  });
 }

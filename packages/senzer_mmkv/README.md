@@ -27,11 +27,17 @@ storage.set('theme', 'dark');
 storage.set('launchCount', (storage.getNumber('launchCount') ?? 0) + 1);
 storage.set('enabled', true);
 storage.set('token', Uint8List.fromList(<int>[1, 2, 3]));
+storage.setInt64('revision', 9223372036854775807);
 
 final theme = storage.getString('theme');
 final keys = storage.getAllKeys();
+final revision = storage.getInt64('revision');
 storage.close();
 ```
+
+`set(..., num)` remains double-compatible with JavaScript MMKV. Use
+`setInt64`/`getInt64` (or the shorter `setInt`/`getInt` aliases) when Dart code
+needs exact signed 64-bit integer storage.
 
 For protected values, opt in explicitly to AES-128 or AES-256:
 

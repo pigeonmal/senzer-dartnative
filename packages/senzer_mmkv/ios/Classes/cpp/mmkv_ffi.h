@@ -27,6 +27,8 @@ DNMMKV_EXPORT int32_t DNMMKVSetBoolean(DNMMKVHandle handle, const uint8_t* key, 
                                        int32_t value);
 DNMMKV_EXPORT int32_t DNMMKVSetNumber(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
                                       double value);
+DNMMKV_EXPORT int32_t DNMMKVSetInt64(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
+                                     int64_t value);
 DNMMKV_EXPORT int32_t DNMMKVSetBuffer(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
                                       const uint8_t* value, size_t value_len);
 DNMMKV_EXPORT int32_t DNMMKVGetString(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
@@ -35,6 +37,8 @@ DNMMKV_EXPORT int32_t DNMMKVGetBoolean(DNMMKVHandle handle, const uint8_t* key, 
                                        int32_t* value);
 DNMMKV_EXPORT int32_t DNMMKVGetNumber(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
                                       double* value);
+DNMMKV_EXPORT int32_t DNMMKVGetInt64(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
+                                     int64_t* value);
 DNMMKV_EXPORT int32_t DNMMKVGetBuffer(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
                                       uint8_t** value, size_t* value_len);
 DNMMKV_EXPORT int32_t DNMMKVContains(DNMMKVHandle handle, const uint8_t* key, size_t key_len);
