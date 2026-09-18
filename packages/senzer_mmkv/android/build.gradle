@@ -22,7 +22,7 @@ android {
     consumerProguardFiles 'consumer-rules.pro'
     externalNativeBuild {
       cmake {
-        cppFlags '-std=c++20 -fexceptions -frtti -Wall -fstack-protector-strong'
+        cppFlags '-std=c++20 -Wall -fstack-protector-strong'
         arguments '-DANDROID_STL=c++_shared', '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON'
       }
     }

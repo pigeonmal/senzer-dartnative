@@ -1,7 +1,5 @@
 #include <jni.h>
 
-#include <string>
-
 #include "mmkv_ffi.h"
 
 extern "C" JNIEXPORT void JNICALL
@@ -10,9 +8,9 @@ Java_com_senzer_mmkv_SenzerMmkvBridge_nativeSetDefaultRootPath(
   if (env == nullptr || path == nullptr) return;
   const char* chars = env->GetStringUTFChars(path, nullptr);
   if (chars == nullptr) return;
-  const std::string value(chars);
+  const auto length = static_cast<size_t>(env->GetStringUTFLength(path));
+  DNMMKVSetDefaultRootPath(reinterpret_cast<const uint8_t*>(chars), length);
   env->ReleaseStringUTFChars(path, chars);
-  DNMMKVSetDefaultRootPath(reinterpret_cast<const uint8_t*>(value.data()), value.size());
 }
 
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
