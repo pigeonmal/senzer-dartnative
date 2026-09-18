@@ -1,0 +1,7 @@
+name: senzer_dartnative_workspace
+description: Community DartNative plugins maintained independently of Senzer applications.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.12.0-192.0.dev

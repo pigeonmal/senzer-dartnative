@@ -1,0 +1,17 @@
+.DS_Store
+.dart_tool/
+.packages
+.pub/
+build/
+dist/
+coverage/
+*.iml
+.idea/
+.cxx/
+android/.gradle/
+android/build/
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/
+pubspec.lock
+**/.dn-plugins-dependencies

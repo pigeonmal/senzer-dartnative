@@ -1,0 +1,9 @@
+include: package:lints/recommended.yaml
+
+analyzer:
+  errors:
+    library_private_types_in_public_api: ignore
+
+linter:
+  rules:
+    avoid_print: false
