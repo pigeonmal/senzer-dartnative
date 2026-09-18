@@ -1,0 +1,37 @@
+PODS:
+  - dartnative_ios (1.0.0):
+    - FlexLayout (= 2.0.10)
+  - DartNativeCore (1.0.0)
+  - FlexLayout (2.0.10)
+  - MMKVCore (2.4.2)
+  - senzer_mmkv (0.1.0):
+    - MMKVCore (= 2.4.2)
+
+DEPENDENCIES:
+  - dartnative_ios (from `.symlinks/plugins/dartnative_ios/ios`)
+  - DartNativeCore (from `DartNative`)
+  - senzer_mmkv (from `.symlinks/plugins/senzer_mmkv/ios`)
+
+SPEC REPOS:
+  trunk:
+    - FlexLayout
+    - MMKVCore
+
+EXTERNAL SOURCES:
+  dartnative_ios:
+    :path: ".symlinks/plugins/dartnative_ios/ios"
+  DartNativeCore:
+    :path: DartNative
+  senzer_mmkv:
+    :path: ".symlinks/plugins/senzer_mmkv/ios"
+
+SPEC CHECKSUMS:
+  dartnative_ios: 88d434758a21de28291d1ca70f9a144bd28548c7
+  DartNativeCore: 97106aef3a975e6b1a268568d58dfb74dcbebd9f
+  FlexLayout: ea94491c923485f7f28891cb5b10245d22df380b
+  MMKVCore: a58d2ce5b580948122e85be3ddf378c9b1ef739e
+  senzer_mmkv: 60ebf94f48cf6a6443bb8eded1f819e736e9d1f4
+
+PODFILE CHECKSUM: 2027602dfb4ee039bf14f8eba14db72cc650551f
+
+COCOAPODS: 1.17.0

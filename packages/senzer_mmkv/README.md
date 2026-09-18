@@ -65,6 +65,26 @@ call `SenzerMMKVBindings.loadSymbols()` once before creating an instance. The
 generated registrant loads the Android plugin class and the iOS symbols
 automatically.
 
+## Example integration suite
+
+The checked-in [`example/`](example) app is the device-level regression
+harness. It keeps the application entrypoint, integration tests, and benchmark
+in separate files:
+
+```sh
+cd example
+dn pub get
+dn analyze
+dn run --release -d <android-device-or-emulator>
+dn run -d <ios-simulator>
+```
+
+The app reports every check with `[MMKV_TEST]` and runs the eight storage
+benchmark cases with `[MMKV_BENCH]`. The suite intentionally follows MMKV's
+raw-byte behavior: reading a key through the wrong typed accessor must not
+crash, but can return an interpreted value; the correctly typed accessor must
+still round-trip its original value.
+
 ## Native design
 
 - The package links Tencent MMKV Core 2.4.2, the same mmap-backed C++ engine used

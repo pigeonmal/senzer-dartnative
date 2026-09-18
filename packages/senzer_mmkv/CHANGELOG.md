@@ -1,5 +1,7 @@
 ## 0.1.0
 
+- Added a checked-in iOS/Android example app with 31 native integration checks
+  and an eight-case storage benchmark.
 - Fixed value-change listeners so subscriptions on one handle observe writes
   made through another handle for the same MMKV storage file.
 - Reduced Android JNI bridge metadata by compiling the no-throw loader without

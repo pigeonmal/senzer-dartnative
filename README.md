@@ -10,6 +10,9 @@ products, services, credentials, and private model assets.
 | --- | --- |
 | [`senzer_mmkv`](packages/senzer_mmkv) | Synchronous, Tencent MMKV Core-backed storage with AES encryption for DartNative |
 
+The package's checked-in [`example/`](packages/senzer_mmkv/example) app is the
+cross-platform integration and benchmark harness.
+
 Packages are designed for `dn pub get` and generated
 `DartNativePluginRegistrant` registration. Native code is shared between iOS
 and Android where possible; platform adapters only provide lifecycle and
