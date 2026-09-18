@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
+import 'src/listener_registry.dart';
 import 'src/mmkv_bindings.dart';
 
 export 'src/mmkv_bindings.dart' show SenzerMMKVBindings;
@@ -60,6 +61,7 @@ final class MMKV implements Finalizable {
     this.compareBeforeSet = false,
     this.recoveryStrategy,
   }) : path = path,
+       _listenerScope = MMKVListenerRegistry.scopeFor(id: id, path: path),
        _handle = _open(
          id: id,
          path: path,
@@ -81,8 +83,8 @@ final class MMKV implements Finalizable {
   final bool compareBeforeSet;
   final MMKVRecoveryStrategy? recoveryStrategy;
   Pointer<Void> _handle;
-  final Map<int, void Function(String)> _listeners = {};
-  int _nextListenerId = 0;
+  final Set<MMKVListenerRegistration> _listenerRegistrations = {};
+  final String _listenerScope;
 
   static Pointer<Void> _open({
     required String id,
@@ -538,15 +540,22 @@ final class MMKV implements Finalizable {
 
   MMKVListener addOnValueChangedListener(void Function(String key) listener) {
     _ensureOpen();
-    final id = _nextListenerId++;
-    _listeners[id] = listener;
-    return MMKVListener(() => _listeners.remove(id));
+    final registration = MMKVListenerRegistry.add(_listenerScope, listener);
+    _listenerRegistrations.add(registration);
+    return MMKVListener(() {
+      if (_listenerRegistrations.remove(registration)) {
+        MMKVListenerRegistry.remove(registration);
+      }
+    });
   }
 
-  void _notify(String key) {
-    for (final listener in List<void Function(String)>.of(_listeners.values)) {
-      listener(key);
+  void _notify(String key) => MMKVListenerRegistry.notify(_listenerScope, key);
+
+  void _removeListeners() {
+    for (final registration in _listenerRegistrations) {
+      MMKVListenerRegistry.remove(registration);
     }
+    _listenerRegistrations.clear();
   }
 
   @Deprecated('Use encrypt or decrypt instead.')
@@ -592,7 +601,7 @@ final class MMKV implements Finalizable {
 
   void close() {
     if (isClosed) return;
-    _listeners.clear();
+    _removeListeners();
     SenzerMMKVBindings.finalizer.detach(this);
     SenzerMMKVBindings.destroy(_handle);
     _handle = nullptr;
