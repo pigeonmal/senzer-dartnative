@@ -2,7 +2,7 @@ import 'package:dartnative/dartnative.dart';
 
 import 'dartnative_plugin_registrant.dart';
 import 'integration_tests.dart';
-import 'benchmark.dart';
+import 'benchmarks/comparison_benchmark.dart';
 
 void main() {
   // This must be the first application call so the MMKV FFI symbols and
@@ -40,13 +40,20 @@ final class _MMKVExampleAppState extends State<MMKVExampleApp> {
     });
     if (!report.passed) return;
 
-    final benchmarkRows = await runMMKVBenchmarks();
+    final benchmarkStores = await runStorageBenchmarks();
     if (!mounted) return;
     setState(() {
       _lines.add('');
       _lines.add('Benchmark (1,000 operations per case):');
-      _lines.addAll(benchmarkRows.map((row) =>
-          '${row.name}: ${row.elapsedMicros / 1000.0} ms, ${row.opsPerSecond.toStringAsFixed(0)} ops/s'));
+      for (final benchmarkStore in benchmarkStores) {
+        _lines.add(benchmarkStore.store);
+        _lines.addAll(
+          benchmarkStore.rows.map(
+            (row) =>
+                '  ${row.name}: ${row.elapsedMs.toStringAsFixed(3)} ms, ${row.opsPerSecond.toStringAsFixed(3)} ops/s',
+          ),
+        );
+      }
       _status = 'ALL PASS (${report.passedChecks.length} checks)';
     });
     print('[MMKV_TEST] ALL PASS ${report.passedChecks.length} checks');
@@ -60,7 +67,10 @@ final class _MMKVExampleAppState extends State<MMKVExampleApp> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: <Widget>[
-          Text(_status, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          Text(
+            _status,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 12),
           ..._lines.map(Text.new),
         ],

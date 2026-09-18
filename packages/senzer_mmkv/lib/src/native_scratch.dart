@@ -21,6 +21,7 @@ final class NativeByteScratch {
 
   Pointer<Uint8> _pointer = nullptr;
   int _capacity = 0;
+  Uint8List _bytes = Uint8List(0);
 
   Pointer<Uint8> get pointer => _pointer;
   int get capacity => _capacity;
@@ -39,7 +40,7 @@ final class NativeByteScratch {
     // a temporary Dart byte list for every key/value string operation.
     final maximumBytes = value.length * 4;
     ensureCapacity(maximumBytes == 0 ? 1 : maximumBytes);
-    final output = _pointer.asTypedList(_capacity);
+    final output = _bytes;
     var offset = 0;
     for (var index = 0; index < value.length; index++) {
       var codeUnit = value.codeUnitAt(index);
@@ -84,7 +85,7 @@ final class NativeByteScratch {
   void writeBytes(List<int> bytes) {
     ensureCapacity(bytes.isEmpty ? 1 : bytes.length);
     if (bytes.isNotEmpty) {
-      final target = _pointer.asTypedList(bytes.length);
+      final target = _bytes;
       if (bytes is Uint8List) {
         target.setRange(0, bytes.length, bytes);
       } else {
@@ -97,6 +98,7 @@ final class NativeByteScratch {
     if (length < 0 || length > _capacity) {
       throw RangeError.range(length, 0, _capacity);
     }
+    if (length == _capacity) return _bytes;
     return _pointer.asTypedList(length);
   }
 
@@ -106,6 +108,7 @@ final class NativeByteScratch {
       calloc.free(_pointer);
       _pointer = nullptr;
       _capacity = 0;
+      _bytes = Uint8List(0);
     }
   }
 
@@ -114,6 +117,7 @@ final class NativeByteScratch {
     if (_pointer != nullptr) calloc.free(_pointer);
     _pointer = calloc<Uint8>(capacity);
     _capacity = capacity;
+    _bytes = _pointer.asTypedList(capacity);
     _finalizer.attach(this, _pointer, detach: this);
   }
 }
@@ -133,17 +137,25 @@ final class NativeScalarScratch {
   );
 
   Pointer<Uint8> _pointer = nullptr;
-
-  Pointer<Int32> get int32 => _pointer.cast<Int32>();
-
-  Pointer<Double> get doubleValue =>
+  late final Pointer<Pointer<Uint8>> _pointerValue =
+      _pointer.cast<Pointer<Uint8>>();
+  late final Pointer<Int32> _int32 = _pointer.cast<Int32>();
+  late final Pointer<Double> _double =
       Pointer.fromAddress(_pointer.address + 8).cast<Double>();
-
-  Pointer<Int64> get int64 =>
+  late final Pointer<Int64> _int64 =
       Pointer.fromAddress(_pointer.address + 16).cast<Int64>();
-
-  Pointer<UintPtr> get size =>
+  late final Pointer<UintPtr> _size =
       Pointer.fromAddress(_pointer.address + 24).cast<UintPtr>();
+
+  Pointer<Int32> get int32 => _int32;
+
+  Pointer<Pointer<Uint8>> get pointerValue => _pointerValue;
+
+  Pointer<Double> get doubleValue => _double;
+
+  Pointer<Int64> get int64 => _int64;
+
+  Pointer<UintPtr> get size => _size;
 
   void dispose() {
     _finalizer.detach(this);

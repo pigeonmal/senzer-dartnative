@@ -85,6 +85,8 @@ typedef _GetInt64Dart =
     int Function(Pointer<Void>, Pointer<Uint8>, int, Pointer<Int64>);
 typedef _GetBufferNative = _GetStringNative;
 typedef _GetBufferDart = _GetStringDart;
+typedef _GetViewNative = _GetStringNative;
+typedef _GetViewDart = _GetStringDart;
 typedef _GetIntoNative =
     Int32 Function(
       Pointer<Void>,
@@ -174,6 +176,8 @@ abstract final class SenzerMMKVBindings {
   static late final _GetNumberDart getNumber;
   static late final _GetInt64Dart getInt64;
   static late final _GetBufferDart getBuffer;
+  static late final _GetViewDart getStringView;
+  static late final _GetViewDart getBufferView;
   static late final _GetIntoDart getStringInto;
   static late final _GetIntoDart getBufferInto;
   static late final _ContainsDart contains;
@@ -247,6 +251,12 @@ abstract final class SenzerMMKVBindings {
     );
     getBuffer = library.lookupFunction<_GetBufferNative, _GetBufferDart>(
       'DNMMKVGetBuffer',
+    );
+    getStringView = library.lookupFunction<_GetViewNative, _GetViewDart>(
+      'DNMMKVGetStringView',
+    );
+    getBufferView = library.lookupFunction<_GetViewNative, _GetViewDart>(
+      'DNMMKVGetBufferView',
     );
     getStringInto = library.lookupFunction<_GetIntoNative, _GetIntoDart>(
       'DNMMKVGetStringInto',

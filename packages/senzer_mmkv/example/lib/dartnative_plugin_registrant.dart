@@ -39,6 +39,8 @@ abstract final class DartNativePluginRegistrant {
       DartNativeLicense.instance.noteTrialEnded();
     }
     DartNativeLicense.instance.reportPluginUsage(const <String>[
+      'dartnative_hive',
+      'dartnative_sqlite',
       'senzer_mmkv',
     ]);
     registerNativeBindings(

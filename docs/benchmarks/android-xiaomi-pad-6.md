@@ -18,8 +18,8 @@ rows are the previously recorded baseline and were intentionally not rerun.
 The senzer harness also uses the same string and 256-byte payloads, per-round
 keys, varying number writes, and alternating boolean writes as the RN cases.
 
-SQLite and Hive are used only by the separate comparison harness; they are not
-dependencies of the public `senzer_mmkv` package.
+SQLite and Hive are used only by the checked-in comparison benchmarks in the
+example app; they are not dependencies of the public `senzer_mmkv` package.
 
 The cases are intentionally small storage calls: string, number, boolean, and
 a 256-byte buffer, each written and read. SQLite and Hive use
@@ -66,6 +66,7 @@ comparison libraries do not expose the same encryption contract.
 ## Reproduction
 
 The React Native run launched the release APK over ADB. Its APK contained only
-`arm64-v8a` native libraries. The DartNative run used the same device and a
-release `android-arm64` split APK. Device serials are intentionally omitted
-from this public repository.
+`arm64-v8a` native libraries. The DartNative example app ran the
+`senzer_mmkv`, `dartnative_hive`, and `dartnative_sqlite` comparison cases on
+the same device using a release `android-arm64` split APK. Device serials are
+intentionally omitted from this public repository.

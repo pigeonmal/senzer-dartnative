@@ -1,26 +1,36 @@
 # senzer_mmkv
 
-Synchronous, native C++ key-value storage for DartNative. The public API is a
-typed Dart adaptation of the current `react-native-mmkv` storage surface:
-strings, booleans, numbers, byte buffers, multiple instances, read-only mode,
-compare-before-set, multi-process refresh, import, trimming, deletion,
-encryption/rekeying, CRC recovery, memory-cache control, and value-change
-listeners.
+Synchronous, C++-backed MMKV-compatible key-value storage for DartNative.
+Version `0.1.0` is developed in this repository and is **not published to
+pub.dev**.
 
-The compatibility target is the public API documented by
-[`react-native-mmkv`](https://github.com/margelo/react-native-mmkv); this
-package does not bundle or copy its native sources.
+The API follows the storage and factory surface documented by
+[`react-native-mmkv`](https://github.com/margelo/react-native-mmkv), adapted to
+typed Dart values and FFI. It does not include React hooks, React Native mocks,
+or the upstream web adapter.
 
-Compatibility covers the native MMKV storage and factory surface. React-only
-hooks, React Native mocks, and the upstream web adapter are intentionally not
-included because DartNative uses Dart APIs and native FFI instead.
+Supported targets are iOS 15+ and Android API 23+. The package has no SQLite or
+Hive dependency. Android ABI selection remains the host application's choice;
+the plugin does not set `abiFilters`.
 
-Supported native targets are iOS 15+ and Android API 23+.
-The Android plugin does not impose an `abiFilters` restriction, so host builds
-can package `armeabi-v7a`, `arm64-v8a`, and `x86_64` (the arm64-only setting
-used in the benchmark belongs to that separate comparison app). `senzer_mmkv`
-has no SQLite or Hive dependency; those libraries are benchmark-only app
-dependencies.
+## Install
+
+Use a path dependency while the package is unreleased:
+
+```yaml
+dependencies:
+  senzer_mmkv:
+    path: ../senzer-dartnative/packages/senzer_mmkv
+```
+
+Then run `dn pub get`. Register the generated DartNative plugins before the
+first widget:
+
+```dart
+DartNativePluginRegistrant.registerAll();
+```
+
+## Quick start
 
 ```dart
 import 'dart:typed_data';
@@ -40,9 +50,24 @@ final revision = storage.getInt64('revision');
 storage.close();
 ```
 
-`set(..., num)` remains double-compatible with JavaScript MMKV. Use
-`setInt64`/`getInt64` (or the shorter `setInt`/`getInt` aliases) when Dart code
-needs exact signed 64-bit integer storage.
+`set` accepts `String`, `bool`, `num`, `Uint8List`, and `List<int>`.
+
+## API at a glance
+
+| Need | API |
+| --- | --- |
+| Write/read values | `set`, `getString`, `getBoolean`, `getNumber`, `getBuffer` |
+| Exact integers | `setInt64`/`getInt64` or `setInt`/`getInt` |
+| Inspect data | `contains`, `getAllKeys`, `length`, `byteSize` |
+| Delete data | `remove`, `clearAll`, `trim` |
+| Multiple processes | `MMKVMode.multiProcess`, `checkContentChanged` |
+| Memory control | `clearMemoryCache` |
+| Import and listeners | `importAllFrom`, `addOnValueChangedListener` |
+| Instance lifecycle | `existsMMKV`, `deleteMMKV`, `close` |
+| Custom root | `initializeMMKV`, `path:` |
+| Open options | `readOnly`, `compareBeforeSet`, `recoveryStrategy` |
+
+## Encryption
 
 For protected values, opt in explicitly to AES-128 or AES-256:
 
@@ -53,61 +78,76 @@ final secure = createMMKV(
   encryptionType: MMKVEncryptionType.aes256,
 );
 secure.set('refreshToken', '...');
-secure.encrypt('new-32-byte-secret-key-aes-256', encryptionType: MMKVEncryptionType.aes256);
+secure.encrypt('01234567890123456789012345678901', encryptionType: MMKVEncryptionType.aes256);
 secure.decrypt(); // rewrites the file as plaintext when that is intentional
 ```
 
+AES-128 and AES-256 keys must be exactly 16 or 32 UTF-8 bytes. Encryption is
+never silently downgraded to plaintext. `encrypt`, `decrypt`, and the
+deprecated `recrypt` method rewrite the existing file synchronously. Generate
+and persist keys with Keychain/Keystore or another secure store; never commit
+them or derive them from public constants.
+
 Call `initializeMMKV('/shared/app-group/mmkv')` before `createMMKV` when an
-extension or app-group needs to select a shared default root explicitly.
+extension or app group needs an explicit shared root. The generated registrant
+loads the Android plugin and iOS symbols automatically; alternatively call
+`SenzerMMKVBindings.loadSymbols()` once before creating an instance.
 
-Call `DartNativePluginRegistrant.registerAll()` before the first widget, or
-call `SenzerMMKVBindings.loadSymbols()` once before creating an instance. The
-generated registrant loads the Android plugin class and the iOS symbols
-automatically.
+## Android benchmark
 
-## Example integration suite
+The checked-in example app measures the eight storage cases used for the React
+Native comparison: string, number, boolean, and 256-byte buffer writes and
+reads. Each case performs 1,000 operations, with two warm-up rounds and seven
+measured rounds; the table reports the median. Measurements are unencrypted and
+were taken in release mode on an **Android Xiaomi Pad 6** (Android 14,
+`arm64-v8a`).
 
-The checked-in [`example/`](example) app is the device-level regression
-harness. It keeps the application entrypoint, integration tests, and benchmark
-in separate files:
+| Store | String write | String read |
+| --- | ---: | ---: |
+| `senzer_mmkv` | 1,223,990 ops/s · 0.817 ms | 3,389,831 ops/s · 0.295 ms |
+| `react-native-mmkv` | 610,920 ops/s · 1.637 ms | 1,564,284 ops/s · 0.639 ms |
+| `dartnative_hive` | 11,488 ops/s · 87.049 ms | 5,235,602 ops/s · 0.191 ms |
+| `dartnative_sqlite` | 7,364 ops/s · 135.801 ms | 5,720 ops/s · 174.818 ms |
+
+The complete table, workload definition, and reproduction notes are in
+[`docs/benchmarks/android-xiaomi-pad-6.md`](../../docs/benchmarks/android-xiaomi-pad-6.md).
+Hive and SQLite are comparison-only dependencies of the example app. The React
+Native rows are a previously recorded baseline from a fresh React Native
+`0.87.1` TypeScript app with `react-native-mmkv` `4.3.2`; they were not rerun
+during the final DartNative hot-path optimization.
+
+## Example and validation
+
+The checked-in [`example/`](example) app keeps the integration suite and the
+benchmark cases in separate files. It covers typed round trips, wrong-type
+probes, listeners, import, encryption, read-only mode, maintenance calls,
+instance deletion, and lifecycle guards.
 
 ```sh
 cd example
 dn pub get
 dn analyze
 dn run --release -d <android-device-or-emulator>
-dn run -d <ios-simulator>
 ```
 
-The app reports every check with `[MMKV_TEST]` and runs the eight storage
-benchmark cases with `[MMKV_BENCH]`. The suite intentionally follows MMKV's
-raw-byte behavior: reading a key through the wrong typed accessor must not
-crash, but can return an interpreted value; the correctly typed accessor must
-still round-trip its original value.
+Use a physical iOS device for release benchmarking. DartNative's current iOS
+AOT builder intentionally rejects Release/Profile simulator builds; a
+simulator can still be used for non-release integration checks.
 
 ## Native design
 
-- The package links Tencent MMKV Core 2.4.2, the same mmap-backed C++ engine used
-  by the upstream React Native package. It provides append-only protobuf storage,
-  checksums, synchronous mmap writes, process locks, and lazy value caches.
-- `trim()` compacts the MMKV file and clears its native memory cache. Use
-  `clearMemoryCache()` after a memory warning when the next read can afford a
-  reload from disk.
-- AES-128 and AES-256 encryption are available at construction time and through
-  `encrypt`, `decrypt`, and `recrypt`. Keys are limited to 16 or 32 UTF-8 bytes;
-  encryption is never silently downgraded to plaintext.
-- Encryption-key lifecycle is caller-owned: generate and persist keys with a
-  platform secure store (Keychain/Keystore) rather than committing them or
-  deriving them from public app constants.
-- Android uses a small `FlutterPlugin` lifecycle adapter only to load the `.so`
-  and establish the application sandbox path; no method channel is used.
-- iOS resolves the app Library sandbox path in Objective-C++ and exposes the
-  same C ABI through `DynamicLibrary.process()`.
-- Keys and values cross the ABI as pointer-plus-length buffers with explicit
-  `DNMMKVFree` ownership for native results.
-- Hot calls use transient per-instance scratch buffers for ABI transfer; the
-  Dart wrapper does not retain a key/value cache, so MMKV remains the source of
-  truth for every read and write.
+- The package links Tencent MMKV Core 2.4.2, the mmap-backed C++ engine used by
+  the upstream React Native package.
+- Dart calls cross a small pointer-plus-length FFI ABI. Reusable per-instance
+  scratch buffers keep hot reads and writes allocation-light.
+- The Dart wrapper does not maintain a second key/value cache; MMKV remains the
+  source of truth.
+- `trim()` compacts the file. `clearMemoryCache()` drops native cached values so
+  the next read can reload from disk after a memory warning.
+- Android uses a small plugin lifecycle adapter to load the native library and
+  establish the app sandbox path; no method channel is used. iOS resolves the
+  Library sandbox path in Objective-C++ and exposes the same ABI through
+  `DynamicLibrary.process()`.
 
 ## Storage location
 
@@ -116,13 +156,10 @@ By default, iOS uses `<Application Library>/mmkv` and Android uses
 a different app-owned directory. Instance IDs are filename-safe values and are
 encoded by MMKV when needed for safe filesystem storage.
 
-## Upstream and third-party notices
+## License and notices
 
 The DartNative wrapper is MIT-licensed. Native storage is provided by
-[Tencent MMKV Core 2.4.2](https://github.com/Tencent/MMKV), which is licensed
-under the BSD 3-Clause license; see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
-
-## License
-
-MIT. The package contains no Senzer product code, credentials, endpoints, or
-private assets.
+[Tencent MMKV Core 2.4.2](https://github.com/Tencent/MMKV), licensed under the
+BSD 3-Clause license; see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+The package contains no Senzer product code, credentials, endpoints, or private
+assets.

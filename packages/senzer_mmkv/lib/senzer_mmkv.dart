@@ -19,8 +19,6 @@ enum MMKVEncryptionType { aes128, aes256 }
 /// Recovery policy for CRC or file-length errors.
 enum MMKVRecoveryStrategy { discardOnError, recoverOnError }
 
-const _bufferTooSmall = -4;
-
 /// An actionable error returned by the native MMKV core.
 final class MMKVException implements Exception {
   const MMKVException(this.message, {this.code});
@@ -77,7 +75,6 @@ final class MMKV implements Finalizable {
        ) {
     _keyScratch = NativeByteScratch();
     _valueScratch = NativeByteScratch();
-    _outputScratch = NativeByteScratch(initialCapacity: 128);
     _scalarScratch = NativeScalarScratch();
     SenzerMMKVBindings.finalizer.attach(this, _handle, detach: this);
   }
@@ -92,7 +89,6 @@ final class MMKV implements Finalizable {
   Pointer<Void> _handle;
   late final NativeByteScratch _keyScratch;
   late final NativeByteScratch _valueScratch;
-  late final NativeByteScratch _outputScratch;
   late final NativeScalarScratch _scalarScratch;
   final Set<MMKVListenerRegistration> _listenerRegistrations = {};
   final String _listenerScope;
@@ -258,28 +254,28 @@ final class MMKV implements Finalizable {
     final keyLength = _prepareKey(key);
     final keyPointer = _keyScratch.pointer;
     final length = _scalarScratch.size;
-    var status = SenzerMMKVBindings.getStringInto(
+    final status = SenzerMMKVBindings.getStringView(
       _handle,
       keyPointer,
       keyLength,
-      _outputScratch.pointer,
-      _outputScratch.capacity,
+      _scalarScratch.pointerValue,
       length,
     );
-    if (status == _bufferTooSmall) {
-      _outputScratch.ensureCapacity(length.value);
-      status = SenzerMMKVBindings.getStringInto(
-        _handle,
-        keyPointer,
-        keyLength,
-        _outputScratch.pointer,
-        _outputScratch.capacity,
-        length,
-      );
-    }
     if (status == 1 || status == 2) return null;
     _runStatus(status, 'getString');
-    return utf8.decode(_outputScratch.view(length.value));
+    if (length.value == 0) return '';
+    final bytes = _scalarScratch.pointerValue.value.asTypedList(length.value);
+    // Most storage keys/values are ASCII. Avoid the UTF-8 validator and
+    // decoder machinery for that common case while retaining full UTF-8
+    // support for non-ASCII values.
+    var ascii = true;
+    for (final byte in bytes) {
+      if (byte >= 0x80) {
+        ascii = false;
+        break;
+      }
+    }
+    return ascii ? String.fromCharCodes(bytes) : utf8.decode(bytes);
   }
 
   double? getNumber(String key) {
@@ -337,28 +333,19 @@ final class MMKV implements Finalizable {
     final keyLength = _prepareKey(key);
     final keyPointer = _keyScratch.pointer;
     final length = _scalarScratch.size;
-    var status = SenzerMMKVBindings.getBufferInto(
+    final status = SenzerMMKVBindings.getBufferView(
       _handle,
       keyPointer,
       keyLength,
-      _outputScratch.pointer,
-      _outputScratch.capacity,
+      _scalarScratch.pointerValue,
       length,
     );
-    if (status == _bufferTooSmall) {
-      _outputScratch.ensureCapacity(length.value);
-      status = SenzerMMKVBindings.getBufferInto(
-        _handle,
-        keyPointer,
-        keyLength,
-        _outputScratch.pointer,
-        _outputScratch.capacity,
-        length,
-      );
-    }
     if (status == 1 || status == 2) return null;
     _runStatus(status, 'getBuffer');
-    return Uint8List.fromList(_outputScratch.view(length.value));
+    if (length.value == 0) return Uint8List(0);
+    return Uint8List.fromList(
+      _scalarScratch.pointerValue.value.asTypedList(length.value),
+    );
   }
 
   bool contains(String key) {
@@ -587,7 +574,6 @@ final class MMKV implements Finalizable {
     SenzerMMKVBindings.finalizer.detach(this);
     _keyScratch.dispose();
     _valueScratch.dispose();
-    _outputScratch.dispose();
     _scalarScratch.dispose();
     SenzerMMKVBindings.destroy(_handle);
     _handle = nullptr;

@@ -50,6 +50,13 @@ constexpr int32_t kReadOnly = -3;
 constexpr int32_t kBufferTooSmall = -4;
 
 thread_local std::string g_last_error;
+// DartNative's synchronous FFI calls run to completion before the next call on
+// an isolate. Reuse the decode buffer on that native thread so string reads do
+// not allocate a temporary std::string for every operation. The buffer is
+// thread-local rather than attached to a shared MMKV instance, preserving the
+// native engine's ability to serve multiple isolates concurrently.
+thread_local std::string g_string_scratch;
+thread_local mmkv::MMBuffer g_buffer_scratch;
 
 struct SharedInstance {
   NativeMMKV* value = nullptr;
@@ -333,9 +340,10 @@ int32_t DNMMKVGetString(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
     if (instance == nullptr || output == nullptr || output_len == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
     if (key_view.empty()) return kInvalidArgument;
-    std::string result;
-    const auto status = getKeyStatus(instance, key_view, instance->getString(key_view, result, true));
-    return status == kOk ? copyOut(result, output, output_len) : status;
+    g_string_scratch.clear();
+    const auto status =
+        getKeyStatus(instance, key_view, instance->getString(key_view, g_string_scratch, true));
+    return status == kOk ? copyOut(g_string_scratch, output, output_len) : status;
   });
 }
 
@@ -403,10 +411,13 @@ int32_t DNMMKVGetStringInto(DNMMKVHandle handle, const uint8_t* key, size_t key_
     if (instance == nullptr || output_len == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
     if (key_view.empty()) return kInvalidArgument;
-    std::string result;
-    const auto status = getKeyStatus(instance, key_view, instance->getString(key_view, result, true));
-    return status == kOk ? copyInto(result.data(), result.size(), output, output_capacity, output_len)
-                         : status;
+    g_string_scratch.clear();
+    const auto status =
+        getKeyStatus(instance, key_view, instance->getString(key_view, g_string_scratch, true));
+    return status == kOk
+               ? copyInto(g_string_scratch.data(), g_string_scratch.size(), output, output_capacity,
+                          output_len)
+               : status;
   });
 }
 
@@ -421,6 +432,47 @@ int32_t DNMMKVGetBufferInto(DNMMKVHandle handle, const uint8_t* key, size_t key_
     const auto status = getKeyStatus(instance, key_view, instance->getBytes(key_view, result));
     if (status != kOk) return status;
     return copyInto(result.getPtr(), result.length(), output, output_capacity, output_len);
+  });
+}
+
+int32_t DNMMKVGetStringView(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
+                            const uint8_t** output, size_t* output_len) {
+  return guarded([&] {
+    auto* instance = value(handle);
+    if (instance == nullptr || output == nullptr || output_len == nullptr) return kInvalidArgument;
+    const auto key_view = toView(key, key_len);
+    if (key_view.empty()) return kInvalidArgument;
+    g_string_scratch.clear();
+    const auto status =
+        getKeyStatus(instance, key_view, instance->getString(key_view, g_string_scratch, true));
+    if (status != kOk) {
+      *output = nullptr;
+      *output_len = 0;
+      return status;
+    }
+    *output = reinterpret_cast<const uint8_t*>(g_string_scratch.data());
+    *output_len = g_string_scratch.size();
+    return kOk;
+  });
+}
+
+int32_t DNMMKVGetBufferView(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
+                            const uint8_t** output, size_t* output_len) {
+  return guarded([&] {
+    auto* instance = value(handle);
+    if (instance == nullptr || output == nullptr || output_len == nullptr) return kInvalidArgument;
+    const auto key_view = toView(key, key_len);
+    if (key_view.empty()) return kInvalidArgument;
+    const auto got_value = instance->getBytes(key_view, g_buffer_scratch);
+    const auto status = getKeyStatus(instance, key_view, got_value);
+    if (status != kOk) {
+      *output = nullptr;
+      *output_len = 0;
+      return status;
+    }
+    *output = reinterpret_cast<const uint8_t*>(g_buffer_scratch.getPtr());
+    *output_len = g_buffer_scratch.length();
+    return kOk;
   });
 }
 

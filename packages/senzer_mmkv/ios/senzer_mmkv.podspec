@@ -19,6 +19,10 @@ Pod::Spec.new do |s|
   s.pod_target_xcconfig = {
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++20',
     'CLANG_CXX_LIBRARY' => 'libc++',
+    # The FFI bridge is on every synchronous read/write path. Keep the
+    # release bridge at -O3; MMKVCore remains owned by its own pod target.
+    'GCC_OPTIMIZATION_LEVEL[config=Debug]' => '3',
+    'GCC_OPTIMIZATION_LEVEL[config=Release]' => '3',
     'DEFINES_MODULE' => 'YES',
     'GCC_WARN_INHIBIT_ALL_WARNINGS' => 'NO',
   }

@@ -49,6 +49,15 @@ DNMMKV_EXPORT int32_t DNMMKVGetStringInto(DNMMKVHandle handle, const uint8_t* ke
 DNMMKV_EXPORT int32_t DNMMKVGetBufferInto(DNMMKVHandle handle, const uint8_t* key,
                                           size_t key_len, uint8_t* output,
                                           size_t output_capacity, size_t* output_len);
+// Borrowed synchronous views avoid a native-to-Dart memcpy. The returned
+// pointer remains valid until the next native call on the same thread and must
+// be copied/materialized by the caller before making another call.
+DNMMKV_EXPORT int32_t DNMMKVGetStringView(DNMMKVHandle handle, const uint8_t* key,
+                                          size_t key_len, const uint8_t** output,
+                                          size_t* output_len);
+DNMMKV_EXPORT int32_t DNMMKVGetBufferView(DNMMKVHandle handle, const uint8_t* key,
+                                          size_t key_len, const uint8_t** output,
+                                          size_t* output_len);
 DNMMKV_EXPORT int32_t DNMMKVContains(DNMMKVHandle handle, const uint8_t* key, size_t key_len);
 DNMMKV_EXPORT int32_t DNMMKVGetKeyCount(DNMMKVHandle handle, size_t* count);
 DNMMKV_EXPORT int32_t DNMMKVGetKeyAt(DNMMKVHandle handle, size_t index, uint8_t** key,

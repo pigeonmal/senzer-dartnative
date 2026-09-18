@@ -1,55 +1,27 @@
-# senzer_mmkv_example
+# senzer_mmkv example
 
-A **dartnative** app, scaffolded by `dn create`. It ships with correct iOS +
-Android runner glue (so it renders instead of white-screening) and is ready for a
-branded splash + app icon.
+This DartNative app is the device-level regression and benchmark harness for
+`senzer_mmkv`.
 
-## Run integration tests and benchmark
+## Validate and benchmark
 
 ```sh
 dn pub get
 dn analyze
 dn run --release -d <android-device-or-emulator>
-dn run -d <ios-simulator>
 ```
 
 The app runs the complete native integration suite from
-`lib/integration_tests.dart`, then the eight-case storage benchmark from
-`lib/benchmark.dart`. Watch the native run output for `[MMKV_TEST] ALL PASS` and
-`[MMKV_BENCH]` lines. The iOS runner targets iOS 15+, matching the plugin.
+`lib/integration_tests.dart`, then the eight-case benchmarks from
+`lib/benchmarks/` for `senzer_mmkv`, `dartnative_hive`, and `dartnative_sqlite`.
+Watch for `[MMKV_TEST] ALL PASS`, `[MMKV_BENCH]`, `[HIVE_BENCH]`, and
+`[SQLITE_BENCH]` in the native output. Hive and SQLite are comparison-only app
+dependencies; they are not dependencies of the package.
 
-dartnative apps require a license. Subscribe at
-[dartpub.dev/framework](https://dartpub.dev/framework), copy your license key
-(`dnk_...`) from the Framework panel, and configure it once:
+Use a physical iOS device for a release benchmark. DartNative currently rejects
+Release/Profile AOT builds for iOS simulators, although a simulator remains
+useful for non-release integration checks.
 
-```sh
-dn config --license-key dnk_...
-```
-
-After that `dn run` just works, on every platform. (Prefer not to store the
-key? Pass it per run instead: `dn run --dart-define=DN_LICENSE_KEY=dnk_...`.)
-
-Always use **`dn`** for run/build/pub commands — not the underlying SDK CLI.
-
-## Make it yours
-
-- **Your UI** — edit `lib/main.dart`.
-- **App icon + launch logo** — replace `assets/dn-logo.png` with your logo, then
-  regenerate icon **and** splash in one step:
-  ```sh
-  dart run tool/generate_app_assets.dart --source=assets/dn-logo.png --bg=#000000
-  ```
-  (Splash only: `dart run dartnative_splash:setup`.)
-- **Plugins** — browse **[dartpub.dev](https://dartpub.dev)**. Add a package to
-  `pubspec.yaml`, run `dn pub get`, and import it — pure-Dart packages and
-  dartnative plugins both work as-is.
-
-## Don't touch (unless you know the runtime)
-
-These files are the dartnative runner glue — they're why the app renders:
-`ios/Runner/{AppDelegate,SceneDelegate}.swift` + the scene block in `Info.plist`,
-and `android/.../{Application,MainActivity}.kt` + the Material3 themes in
-`android/app/src/main/res/values*/styles.xml`.
-
-> Dependency paths in `pubspec.yaml` assume this app sits beside
-> `dartnative_framework`. Fix them if you created it elsewhere.
+Always use `dn` for DartNative commands. The app must register
+`DartNativePluginRegistrant` before the first widget; this is already wired in
+`lib/main.dart`.
