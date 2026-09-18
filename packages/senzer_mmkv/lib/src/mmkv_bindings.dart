@@ -85,6 +85,24 @@ typedef _GetInt64Dart =
     int Function(Pointer<Void>, Pointer<Uint8>, int, Pointer<Int64>);
 typedef _GetBufferNative = _GetStringNative;
 typedef _GetBufferDart = _GetStringDart;
+typedef _GetIntoNative =
+    Int32 Function(
+      Pointer<Void>,
+      Pointer<Uint8>,
+      UintPtr,
+      Pointer<Uint8>,
+      UintPtr,
+      Pointer<UintPtr>,
+    );
+typedef _GetIntoDart =
+    int Function(
+      Pointer<Void>,
+      Pointer<Uint8>,
+      int,
+      Pointer<Uint8>,
+      int,
+      Pointer<UintPtr>,
+    );
 typedef _ContainsNative =
     Int32 Function(Pointer<Void>, Pointer<Uint8>, UintPtr);
 typedef _ContainsDart = int Function(Pointer<Void>, Pointer<Uint8>, int);
@@ -156,6 +174,8 @@ abstract final class SenzerMMKVBindings {
   static late final _GetNumberDart getNumber;
   static late final _GetInt64Dart getInt64;
   static late final _GetBufferDart getBuffer;
+  static late final _GetIntoDart getStringInto;
+  static late final _GetIntoDart getBufferInto;
   static late final _ContainsDart contains;
   static late final _GetKeyCountDart getKeyCount;
   static late final _GetKeyAtDart getKeyAt;
@@ -227,6 +247,12 @@ abstract final class SenzerMMKVBindings {
     );
     getBuffer = library.lookupFunction<_GetBufferNative, _GetBufferDart>(
       'DNMMKVGetBuffer',
+    );
+    getStringInto = library.lookupFunction<_GetIntoNative, _GetIntoDart>(
+      'DNMMKVGetStringInto',
+    );
+    getBufferInto = library.lookupFunction<_GetIntoNative, _GetIntoDart>(
+      'DNMMKVGetBufferInto',
     );
     contains = library.lookupFunction<_ContainsNative, _ContainsDart>(
       'DNMMKVContains',

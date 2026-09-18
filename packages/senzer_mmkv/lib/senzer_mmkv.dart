@@ -6,6 +6,7 @@ import 'package:ffi/ffi.dart';
 
 import 'src/listener_registry.dart';
 import 'src/mmkv_bindings.dart';
+import 'src/native_scratch.dart';
 
 export 'src/mmkv_bindings.dart' show SenzerMMKVBindings;
 
@@ -17,6 +18,8 @@ enum MMKVEncryptionType { aes128, aes256 }
 
 /// Recovery policy for CRC or file-length errors.
 enum MMKVRecoveryStrategy { discardOnError, recoverOnError }
+
+const _bufferTooSmall = -4;
 
 /// An actionable error returned by the native MMKV core.
 final class MMKVException implements Exception {
@@ -72,6 +75,10 @@ final class MMKV implements Finalizable {
          compareBeforeSet: compareBeforeSet,
          recoveryStrategy: recoveryStrategy,
        ) {
+    _keyScratch = NativeByteScratch();
+    _valueScratch = NativeByteScratch();
+    _outputScratch = NativeByteScratch(initialCapacity: 128);
+    _scalarScratch = NativeScalarScratch();
     SenzerMMKVBindings.finalizer.attach(this, _handle, detach: this);
   }
 
@@ -83,6 +90,10 @@ final class MMKV implements Finalizable {
   final bool compareBeforeSet;
   final MMKVRecoveryStrategy? recoveryStrategy;
   Pointer<Void> _handle;
+  late final NativeByteScratch _keyScratch;
+  late final NativeByteScratch _valueScratch;
+  late final NativeByteScratch _outputScratch;
+  late final NativeScalarScratch _scalarScratch;
   final Set<MMKVListenerRegistration> _listenerRegistrations = {};
   final String _listenerScope;
 
@@ -162,65 +173,54 @@ final class MMKV implements Finalizable {
     return status;
   }
 
-  T _withKey<T>(String key, T Function(Pointer<Uint8>, int) action) {
+  int _prepareKey(String key) {
     if (key.isEmpty) throw const MMKVException('key must not be empty.');
-    final bytes = Uint8List.fromList(utf8.encode(key));
-    final pointer = SenzerMMKVBindings.allocateBytes(bytes);
-    try {
-      return action(pointer, bytes.length);
-    } finally {
-      calloc.free(pointer);
-    }
+    return _keyScratch.writeUtf8(key);
   }
 
   void set(String key, Object value) {
     _ensureOpen();
-    _withKey<void>(key, (keyPointer, keyLength) {
-      final status = switch (value) {
-        String text => _setString(keyPointer, keyLength, text),
-        bool boolean => SenzerMMKVBindings.setBoolean(
-          _handle,
-          keyPointer,
-          keyLength,
-          boolean ? 1 : 0,
-        ),
-        num number => SenzerMMKVBindings.setNumber(
-          _handle,
-          keyPointer,
-          keyLength,
-          number.toDouble(),
-        ),
-        Uint8List buffer => _setBuffer(keyPointer, keyLength, buffer),
-        List<int> buffer => _setBuffer(
-          keyPointer,
-          keyLength,
-          Uint8List.fromList(buffer),
-        ),
-        _ => throw ArgumentError.value(
-          value,
-          'value',
-          'must be String, bool, num, or Uint8List',
-        ),
-      };
-      _runStatus(status, 'set');
-    });
+    final keyLength = _prepareKey(key);
+    final keyPointer = _keyScratch.pointer;
+    final status = switch (value) {
+      String text => _setString(keyPointer, keyLength, text),
+      bool boolean => SenzerMMKVBindings.setBoolean(
+        _handle,
+        keyPointer,
+        keyLength,
+        boolean ? 1 : 0,
+      ),
+      num number => SenzerMMKVBindings.setNumber(
+        _handle,
+        keyPointer,
+        keyLength,
+        number.toDouble(),
+      ),
+      Uint8List buffer => _setBuffer(keyPointer, keyLength, buffer),
+      List<int> buffer => _setBuffer(
+        keyPointer,
+        keyLength,
+        Uint8List.fromList(buffer),
+      ),
+      _ => throw ArgumentError.value(
+        value,
+        'value',
+        'must be String, bool, num, or Uint8List',
+      ),
+    };
+    _runStatus(status, 'set');
     _notify(key);
   }
 
   int _setString(Pointer<Uint8> key, int keyLength, String value) {
-    final bytes = Uint8List.fromList(utf8.encode(value));
-    final pointer = SenzerMMKVBindings.allocateBytes(bytes);
-    try {
-      return SenzerMMKVBindings.setString(
-        _handle,
-        key,
-        keyLength,
-        pointer,
-        bytes.length,
-      );
-    } finally {
-      calloc.free(pointer);
-    }
+    final length = _valueScratch.writeUtf8(value);
+    return SenzerMMKVBindings.setString(
+      _handle,
+      key,
+      keyLength,
+      _valueScratch.pointer,
+      length,
+    );
   }
 
   /// Stores an exact signed 64-bit integer without converting through a
@@ -230,12 +230,12 @@ final class MMKV implements Finalizable {
     if (value < -0x8000000000000000 || value > 0x7fffffffffffffff) {
       throw RangeError.range(value, -0x8000000000000000, 0x7fffffffffffffff);
     }
-    _withKey<void>(key, (keyPointer, keyLength) {
-      _runStatus(
-        SenzerMMKVBindings.setInt64(_handle, keyPointer, keyLength, value),
-        'setInt64',
-      );
-    });
+    final keyLength = _prepareKey(key);
+    final keyPointer = _keyScratch.pointer;
+    _runStatus(
+      SenzerMMKVBindings.setInt64(_handle, keyPointer, keyLength, value),
+      'setInt64',
+    );
     _notify(key);
   }
 
@@ -243,87 +243,75 @@ final class MMKV implements Finalizable {
   void setInt(String key, int value) => setInt64(key, value);
 
   int _setBuffer(Pointer<Uint8> key, int keyLength, Uint8List value) {
-    final pointer = SenzerMMKVBindings.allocateBytes(value);
-    try {
-      return SenzerMMKVBindings.setBuffer(
-        _handle,
-        key,
-        keyLength,
-        pointer,
-        value.length,
-      );
-    } finally {
-      calloc.free(pointer);
-    }
+    _valueScratch.writeBytes(value);
+    return SenzerMMKVBindings.setBuffer(
+      _handle,
+      key,
+      keyLength,
+      _valueScratch.pointer,
+      value.length,
+    );
   }
 
   String? getString(String key) {
     _ensureOpen();
-    return _withKey<String?>(key, (keyPointer, keyLength) {
-      final output = calloc<Pointer<Uint8>>();
-      final length = calloc<UintPtr>();
-      try {
-        final status = SenzerMMKVBindings.getString(
-          _handle,
-          keyPointer,
-          keyLength,
-          output,
-          length,
-        );
-        if (status == 1 || status == 2) return null;
-        _runStatus(status, 'getString');
-        final bytes = output.value.asTypedList(length.value);
-        return utf8.decode(bytes);
-      } finally {
-        if (output.value != nullptr) {
-          SenzerMMKVBindings.free(output.value.cast());
-        }
-        calloc.free(output);
-        calloc.free(length);
-      }
-    });
+    final keyLength = _prepareKey(key);
+    final keyPointer = _keyScratch.pointer;
+    final length = _scalarScratch.size;
+    var status = SenzerMMKVBindings.getStringInto(
+      _handle,
+      keyPointer,
+      keyLength,
+      _outputScratch.pointer,
+      _outputScratch.capacity,
+      length,
+    );
+    if (status == _bufferTooSmall) {
+      _outputScratch.ensureCapacity(length.value);
+      status = SenzerMMKVBindings.getStringInto(
+        _handle,
+        keyPointer,
+        keyLength,
+        _outputScratch.pointer,
+        _outputScratch.capacity,
+        length,
+      );
+    }
+    if (status == 1 || status == 2) return null;
+    _runStatus(status, 'getString');
+    return utf8.decode(_outputScratch.view(length.value));
   }
 
   double? getNumber(String key) {
     _ensureOpen();
-    return _withKey<double?>(key, (keyPointer, keyLength) {
-      final output = calloc<Double>();
-      try {
-        final status = SenzerMMKVBindings.getNumber(
-          _handle,
-          keyPointer,
-          keyLength,
-          output,
-        );
-        if (status == 1 || status == 2) return null;
-        _runStatus(status, 'getNumber');
-        return output.value;
-      } finally {
-        calloc.free(output);
-      }
-    });
+    final keyLength = _prepareKey(key);
+    final keyPointer = _keyScratch.pointer;
+    final status = SenzerMMKVBindings.getNumber(
+      _handle,
+      keyPointer,
+      keyLength,
+      _scalarScratch.doubleValue,
+    );
+    if (status == 1 || status == 2) return null;
+    _runStatus(status, 'getNumber');
+    return _scalarScratch.doubleValue.value;
   }
 
   /// Reads an exact signed 64-bit integer, or `null` when the key is absent or
   /// stores another MMKV value type.
   int? getInt64(String key) {
     _ensureOpen();
-    return _withKey<int?>(key, (keyPointer, keyLength) {
-      final output = calloc<Int64>();
-      try {
-        final status = SenzerMMKVBindings.getInt64(
-          _handle,
-          keyPointer,
-          keyLength,
-          output,
-        );
-        if (status == 1 || status == 2) return null;
-        _runStatus(status, 'getInt64');
-        return output.value;
-      } finally {
-        calloc.free(output);
-      }
-    });
+    final keyLength = _prepareKey(key);
+    final keyPointer = _keyScratch.pointer;
+    final status = SenzerMMKVBindings.getInt64(
+      _handle,
+      keyPointer,
+      keyLength,
+      _scalarScratch.int64,
+    );
+    if (status == 1 || status == 2) return null;
+    _runStatus(status, 'getInt64');
+    return _scalarScratch.int64.value;
   }
 
   /// Dart-friendly alias for [getInt64].
@@ -331,61 +319,55 @@ final class MMKV implements Finalizable {
 
   bool? getBoolean(String key) {
     _ensureOpen();
-    return _withKey<bool?>(key, (keyPointer, keyLength) {
-      final output = calloc<Int32>();
-      try {
-        final status = SenzerMMKVBindings.getBoolean(
-          _handle,
-          keyPointer,
-          keyLength,
-          output,
-        );
-        if (status == 1 || status == 2) return null;
-        _runStatus(status, 'getBoolean');
-        return output.value != 0;
-      } finally {
-        calloc.free(output);
-      }
-    });
+    final keyLength = _prepareKey(key);
+    final keyPointer = _keyScratch.pointer;
+    final status = SenzerMMKVBindings.getBoolean(
+      _handle,
+      keyPointer,
+      keyLength,
+      _scalarScratch.int32,
+    );
+    if (status == 1 || status == 2) return null;
+    _runStatus(status, 'getBoolean');
+    return _scalarScratch.int32.value != 0;
   }
 
   Uint8List? getBuffer(String key) {
     _ensureOpen();
-    return _withKey<Uint8List?>(key, (keyPointer, keyLength) {
-      final output = calloc<Pointer<Uint8>>();
-      final length = calloc<UintPtr>();
-      try {
-        final status = SenzerMMKVBindings.getBuffer(
-          _handle,
-          keyPointer,
-          keyLength,
-          output,
-          length,
-        );
-        if (status == 1 || status == 2) return null;
-        _runStatus(status, 'getBuffer');
-        return Uint8List.fromList(output.value.asTypedList(length.value));
-      } finally {
-        if (output.value != nullptr) {
-          SenzerMMKVBindings.free(output.value.cast());
-        }
-        calloc.free(output);
-        calloc.free(length);
-      }
-    });
+    final keyLength = _prepareKey(key);
+    final keyPointer = _keyScratch.pointer;
+    final length = _scalarScratch.size;
+    var status = SenzerMMKVBindings.getBufferInto(
+      _handle,
+      keyPointer,
+      keyLength,
+      _outputScratch.pointer,
+      _outputScratch.capacity,
+      length,
+    );
+    if (status == _bufferTooSmall) {
+      _outputScratch.ensureCapacity(length.value);
+      status = SenzerMMKVBindings.getBufferInto(
+        _handle,
+        keyPointer,
+        keyLength,
+        _outputScratch.pointer,
+        _outputScratch.capacity,
+        length,
+      );
+    }
+    if (status == 1 || status == 2) return null;
+    _runStatus(status, 'getBuffer');
+    return Uint8List.fromList(_outputScratch.view(length.value));
   }
 
   bool contains(String key) {
     _ensureOpen();
-    return _withKey<bool>(key, (keyPointer, keyLength) {
-      final status = SenzerMMKVBindings.contains(
-        _handle,
-        keyPointer,
-        keyLength,
-      );
-      _runStatus(status < 0 ? status : 0, 'contains');
-      return status == 1;
-    });
+    final keyLength = _prepareKey(key);
+    final keyPointer = _keyScratch.pointer;
+    final status = SenzerMMKVBindings.contains(_handle, keyPointer, keyLength);
+    _runStatus(status < 0 ? status : 0, 'contains');
+    return status == 1;
   }
 
   List<String> getAllKeys() {
@@ -430,18 +412,18 @@ final class MMKV implements Finalizable {
 
   bool remove(String key) {
     _ensureOpen();
-    final removed = _withKey<bool>(key, (keyPointer, keyLength) {
-      final output = calloc<Int32>();
-      try {
-        _runStatus(
-          SenzerMMKVBindings.remove(_handle, keyPointer, keyLength, output),
-          'remove',
-        );
-        return output.value != 0;
-      } finally {
-        calloc.free(output);
-      }
-    });
+    final keyLength = _prepareKey(key);
+    final keyPointer = _keyScratch.pointer;
+    _runStatus(
+      SenzerMMKVBindings.remove(
+        _handle,
+        keyPointer,
+        keyLength,
+        _scalarScratch.int32,
+      ),
+      'remove',
+    );
+    final removed = _scalarScratch.int32.value != 0;
     if (removed) _notify(key);
     return removed;
   }
@@ -521,21 +503,17 @@ final class MMKV implements Finalizable {
   int importAllFrom(MMKV other) {
     _ensureOpen();
     other._ensureOpen();
-    final imported = calloc<UintPtr>();
-    try {
-      _runStatus(
-        SenzerMMKVBindings.importAll(_handle, other._handle, imported),
-        'importAllFrom',
-      );
-      if (imported.value != 0) {
-        for (final key in getAllKeys()) {
-          _notify(key);
-        }
+    _runStatus(
+      SenzerMMKVBindings.importAll(_handle, other._handle, _scalarScratch.size),
+      'importAllFrom',
+    );
+    final count = _scalarScratch.size.value;
+    if (count != 0) {
+      for (final key in getAllKeys()) {
+        _notify(key);
       }
-      return imported.value;
-    } finally {
-      calloc.free(imported);
     }
+    return count;
   }
 
   MMKVListener addOnValueChangedListener(void Function(String key) listener) {
@@ -549,7 +527,11 @@ final class MMKV implements Finalizable {
     });
   }
 
-  void _notify(String key) => MMKVListenerRegistry.notify(_listenerScope, key);
+  void _notify(String key) {
+    if (MMKVListenerRegistry.hasAnyListeners) {
+      MMKVListenerRegistry.notify(_listenerScope, key);
+    }
+  }
 
   void _removeListeners() {
     for (final registration in _listenerRegistrations) {
@@ -603,6 +585,10 @@ final class MMKV implements Finalizable {
     if (isClosed) return;
     _removeListeners();
     SenzerMMKVBindings.finalizer.detach(this);
+    _keyScratch.dispose();
+    _valueScratch.dispose();
+    _outputScratch.dispose();
+    _scalarScratch.dispose();
     SenzerMMKVBindings.destroy(_handle);
     _handle = nullptr;
   }

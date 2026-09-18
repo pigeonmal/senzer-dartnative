@@ -19,6 +19,10 @@ final class MMKVListenerRegistry {
   _listenersByScope = <String, Map<int, MMKVValueChangedCallback>>{};
   static int _nextId = 0;
 
+  /// Lets write-heavy callers skip hashing their scope when no subscription
+  /// exists anywhere in the isolate.
+  static bool get hasAnyListeners => _listenersByScope.isNotEmpty;
+
   /// Produces a stable key for one storage file without conflating custom
   /// roots that happen to use the same MMKV id.
   static String scopeFor({required String id, String? path}) =>

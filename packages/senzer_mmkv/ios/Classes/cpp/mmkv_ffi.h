@@ -41,6 +41,14 @@ DNMMKV_EXPORT int32_t DNMMKVGetInt64(DNMMKVHandle handle, const uint8_t* key, si
                                      int64_t* value);
 DNMMKV_EXPORT int32_t DNMMKVGetBuffer(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
                                       uint8_t** value, size_t* value_len);
+// Caller-owned output variants avoid a native malloc/free pair for hot reads.
+// Return -4 when output_capacity is too small and write the required length.
+DNMMKV_EXPORT int32_t DNMMKVGetStringInto(DNMMKVHandle handle, const uint8_t* key,
+                                          size_t key_len, uint8_t* output,
+                                          size_t output_capacity, size_t* output_len);
+DNMMKV_EXPORT int32_t DNMMKVGetBufferInto(DNMMKVHandle handle, const uint8_t* key,
+                                          size_t key_len, uint8_t* output,
+                                          size_t output_capacity, size_t* output_len);
 DNMMKV_EXPORT int32_t DNMMKVContains(DNMMKVHandle handle, const uint8_t* key, size_t key_len);
 DNMMKV_EXPORT int32_t DNMMKVGetKeyCount(DNMMKVHandle handle, size_t* count);
 DNMMKV_EXPORT int32_t DNMMKVGetKeyAt(DNMMKVHandle handle, size_t index, uint8_t** key,

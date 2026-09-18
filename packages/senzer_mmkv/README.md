@@ -16,6 +16,11 @@ hooks, React Native mocks, and the upstream web adapter are intentionally not
 included because DartNative uses Dart APIs and native FFI instead.
 
 Supported native targets are iOS 15+ and Android API 23+.
+The Android plugin does not impose an `abiFilters` restriction, so host builds
+can package `armeabi-v7a`, `arm64-v8a`, and `x86_64` (the arm64-only setting
+used in the benchmark belongs to that separate comparison app). `senzer_mmkv`
+has no SQLite or Hive dependency; those libraries are benchmark-only app
+dependencies.
 
 ```dart
 import 'dart:typed_data';
@@ -80,6 +85,9 @@ automatically.
   same C ABI through `DynamicLibrary.process()`.
 - Keys and values cross the ABI as pointer-plus-length buffers with explicit
   `DNMMKVFree` ownership for native results.
+- Hot calls use transient per-instance scratch buffers for ABI transfer; the
+  Dart wrapper does not retain a key/value cache, so MMKV remains the source of
+  truth for every read and write.
 
 ## Storage location
 

@@ -17,6 +17,14 @@ android {
   compileSdk 36
   buildFeatures { prefab true }
 
+  // Tencent's MMKV AAR already supplies libc++_shared for every ABI. Do not
+  // package a second copy from this plugin's CMake externalNativeBuild.
+  packagingOptions {
+    jniLibs {
+      excludes += ['**/libc++_shared.so']
+    }
+  }
+
   defaultConfig {
     minSdk 23
     consumerProguardFiles 'consumer-rules.pro'
