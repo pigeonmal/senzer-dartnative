@@ -102,14 +102,11 @@ measured rounds; the table reports the median. Measurements are unencrypted and
 were taken in release mode on an **Android Xiaomi Pad 6** (Android 14,
 `arm64-v8a`).
 
-| Store | String write | String read |
-| --- | ---: | ---: |
-| `senzer_mmkv` | 1,237,624 ops/s · 0.808 ms | 3,861,004 ops/s · 0.259 ms |
-| `react-native-mmkv` | 610,920 ops/s · 1.637 ms | 1,564,284 ops/s · 0.639 ms |
-| `dartnative_hive` | 11,488 ops/s · 87.049 ms | 5,235,602 ops/s · 0.191 ms |
-| `dartnative_sqlite` | 7,364 ops/s · 135.801 ms | 5,720 ops/s · 174.818 ms |
+<p align="center">
+  <img src="../../docs/benchmarks/benchmark_xiaomi_pad_6.svg" alt="Android Xiaomi Pad 6 Storage Benchmark Chart" width="100%" />
+</p>
 
-The complete table, workload definition, and reproduction notes are in
+The complete workload definition, all 8 measured operations, and reproduction notes are in
 [`docs/benchmarks/android-xiaomi-pad-6.md`](../../docs/benchmarks/android-xiaomi-pad-6.md).
 Hive and SQLite are comparison-only dependencies of the example app. The React
 Native rows are a previously recorded baseline from a fresh React Native

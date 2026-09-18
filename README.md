@@ -17,12 +17,9 @@ Release measurements were taken on an **Android Xiaomi Pad 6** (Android 14,
 measured rounds. The table below shows the median `string write` throughput;
 the full read/write table is in the [benchmark document](docs/benchmarks/android-xiaomi-pad-6.md).
 
-```text
-senzer_mmkv       1,223,990 ops/s   0.817 ms / 1,000 writes
-react-native-mmkv   610,920 ops/s   1.637 ms / 1,000 writes
-dartnative_hive      11,488 ops/s  87.049 ms / 1,000 writes
-dartnative_sqlite     7,364 ops/s 135.801 ms / 1,000 writes
-```
+<p align="center">
+  <img src="docs/benchmarks/benchmark_xiaomi_pad_6.svg" alt="Android Xiaomi Pad 6 Storage Benchmark Chart" width="100%" />
+</p>
 
 The React Native comparison used a fresh React Native `0.87.1` TypeScript app,
 `react-native-mmkv` `4.3.2`, and `react-native-nitro-modules` `0.37.1`. Its
