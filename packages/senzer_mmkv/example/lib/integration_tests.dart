@@ -50,11 +50,26 @@ Future<MMKVIntegrationReport> runMMKVIntegrationTests() async {
     check('string round-trip', storage.getString('string') == 'héllo 🌍');
     check('boolean round-trip', storage.getBoolean('boolean') == true);
     check('number round-trip', storage.getNumber('number') == 42.5);
-    check('int64 max round-trip', storage.getInt64('int64-max') == 0x7fffffffffffffff);
-    check('int64 min round-trip', storage.getInt64('int64-min') == -0x8000000000000000);
-    check('int alias round-trip', storage.getInt('int-alias') == -9007199254740991);
-    check('buffer round-trip', _same(storage.getBuffer('buffer'), <int>[0, 1, 2, 255]));
-    check('list buffer round-trip', _same(storage.getBuffer('list-buffer'), <int>[3, 4, 5]));
+    check(
+      'int64 max round-trip',
+      storage.getInt64('int64-max') == 0x7fffffffffffffff,
+    );
+    check(
+      'int64 min round-trip',
+      storage.getInt64('int64-min') == -0x8000000000000000,
+    );
+    check(
+      'int alias round-trip',
+      storage.getInt('int-alias') == -9007199254740991,
+    );
+    check(
+      'buffer round-trip',
+      _same(storage.getBuffer('buffer'), <int>[0, 1, 2, 255]),
+    );
+    check(
+      'list buffer round-trip',
+      _same(storage.getBuffer('list-buffer'), <int>[3, 4, 5]),
+    );
     // MMKV stores typed payloads as raw bytes. As in react-native-mmkv, a
     // wrong-type read may decode an interpreted value; it must not crash, and
     // the correctly typed read must remain stable.
@@ -62,17 +77,64 @@ Future<MMKVIntegrationReport> runMMKVIntegrationTests() async {
     final wrongNumberRead = storage.getNumber('string');
     final wrongBooleanRead = storage.getBoolean('number');
     final wrongBufferRead = storage.getBuffer('string');
-    print('[MMKV_TEST] wrong-type probes: string=$wrongStringRead number=$wrongNumberRead boolean=$wrongBooleanRead buffer=${wrongBufferRead?.length}B');
+    print(
+      '[MMKV_TEST] wrong-type probes: string=$wrongStringRead number=$wrongNumberRead boolean=$wrongBooleanRead buffer=${wrongBufferRead?.length}B',
+    );
     check('wrong type reads are safe', true);
     check('correct type survives probes', storage.getNumber('number') == 42.5);
-    check('key enumeration', storage.getAllKeys().toSet().containsAll(<String>{
-      'string', 'boolean', 'number', 'int64-max', 'int64-min', 'int-alias', 'buffer', 'list-buffer',
-    }));
+    check(
+      'key enumeration',
+      storage.getAllKeys().toSet().containsAll(<String>{
+        'string',
+        'boolean',
+        'number',
+        'int64-max',
+        'int64-min',
+        'int-alias',
+        'buffer',
+        'list-buffer',
+      }),
+    );
     // ignore: deprecated_member_use
-    check('length and size', storage.length == 8 && storage.size == storage.byteSize && storage.byteSize > 0);
-    check('listener delivery', listenerKeys.contains('string') && listenerKeys.contains('buffer'));
+    check(
+      'length and size',
+      storage.length == 8 &&
+          storage.size == storage.byteSize &&
+          storage.byteSize > 0,
+    );
+    check(
+      'listener delivery',
+      listenerKeys.contains('string') && listenerKeys.contains('buffer'),
+    );
 
-    check('remove', storage.remove('list-buffer') && !storage.contains('list-buffer') && !storage.remove('list-buffer'));
+    final genericIntegers = <String, int>{
+      'generic-int-2^53-1': 0x1fffffffffffff,
+      'generic-int-2^53': 0x20000000000000,
+      'generic-int-2^53+1': 0x20000000000001,
+      'generic-int64-min': -0x8000000000000000,
+      'generic-int64-max': 0x7fffffffffffffff,
+    };
+    for (final entry in genericIntegers.entries) {
+      storage.set(entry.key, entry.value);
+    }
+    check(
+      'generic int dispatch preserves exact int64 boundaries',
+      genericIntegers.entries.every(
+        (entry) => storage.getInt64(entry.key) == entry.value,
+      ),
+    );
+    storage.set('generic-double', 9007199254740992.0);
+    check(
+      'generic double dispatch remains IEEE-754',
+      storage.getNumber('generic-double') == 9007199254740992.0,
+    );
+
+    check(
+      'remove',
+      storage.remove('list-buffer') &&
+          !storage.contains('list-buffer') &&
+          !storage.remove('list-buffer'),
+    );
     storage.trim();
     storage.checkContentChanged();
     storage.clearMemoryCache();
@@ -81,24 +143,54 @@ Future<MMKVIntegrationReport> runMMKVIntegrationTests() async {
     final importSource = MMKV(id: '${id}_source', path: root.path);
     importSource.set('imported', 'value');
     final imported = storage.importAllFrom(importSource);
-    check('importAllFrom', imported == 1 && storage.getString('imported') == 'value');
+    check(
+      'importAllFrom',
+      imported == 1 && storage.getString('imported') == 'value',
+    );
     importSource.close();
 
-    storage.encrypt('01234567890123456789012345678901', encryptionType: MMKVEncryptionType.aes256);
-    check('AES-256 encryption', storage.isEncrypted && storage.getString('string') == 'héllo 🌍');
+    storage.encrypt(
+      '01234567890123456789012345678901',
+      encryptionType: MMKVEncryptionType.aes256,
+    );
+    check(
+      'AES-256 encryption',
+      storage.isEncrypted && storage.getString('string') == 'héllo 🌍',
+    );
     storage.decrypt();
-    check('decrypt', !storage.isEncrypted && storage.getString('string') == 'héllo 🌍');
+    check(
+      'decrypt',
+      !storage.isEncrypted && storage.getString('string') == 'héllo 🌍',
+    );
     // ignore: deprecated_member_use
-    storage.recrypt('0123456789012345', encryptionType: MMKVEncryptionType.aes128);
-    check('direct recrypt', storage.isEncrypted && storage.getString('string') == 'héllo 🌍');
+    storage.recrypt(
+      '0123456789012345',
+      encryptionType: MMKVEncryptionType.aes128,
+    );
+    check(
+      'direct recrypt',
+      storage.isEncrypted && storage.getString('string') == 'héllo 🌍',
+    );
     // ignore: deprecated_member_use
     storage.recrypt(null);
-    check('direct decrypt', !storage.isEncrypted && storage.getString('string') == 'héllo 🌍');
+    check(
+      'direct decrypt',
+      !storage.isEncrypted && storage.getString('string') == 'héllo 🌍',
+    );
 
     // MMKV caches an instance by (root, id), so use a fresh id when changing
     // mode in the same process. This mirrors react-native-mmkv's test harness.
-    final readonly = MMKV(id: '${id}_readonly', path: root.path, readOnly: true);
-    check('read-only open', readonly.isReadOnly && readonly.length == 0 && !readonly.contains('missing'));
+    final readonly = MMKV(
+      id: '${id}_readonly',
+      path: root.path,
+      readOnly: true,
+    );
+    check(
+      'read-only open',
+      readonly.isReadOnly &&
+          readonly.length == 0 &&
+          !readonly.contains('missing'),
+    );
     var readonlySetThrew = false;
     try {
       readonly.set('key', 'value');
@@ -118,10 +210,47 @@ Future<MMKVIntegrationReport> runMMKVIntegrationTests() async {
       recoveryStrategy: MMKVRecoveryStrategy.recoverOnError,
     );
     check('mode and recovery options', !options.isReadOnly);
+    var compareBeforeSetEncryptRejected = false;
+    try {
+      options.encrypt('0123456789abcdef');
+    } on MMKVException catch (error) {
+      compareBeforeSetEncryptRejected = error.message.contains(
+        'compareBeforeSet cannot be combined with encryption',
+      );
+    }
+    check(
+      'compare-before-set instance cannot be encrypted later',
+      compareBeforeSetEncryptRejected && !options.isEncrypted,
+    );
     options.close();
 
-    final aes128 = MMKV(id: '${id}_aes128', path: root.path, encryptionKey: '0123456789012345');
-    check('constructor encryption', aes128.isEncrypted && aes128.getString('string') == null);
+    var encryptedCompareRejected = false;
+    try {
+      MMKV(
+        id: '${id}_encrypted_compare',
+        path: root.path,
+        encryptionKey: '0123456789abcdef',
+        compareBeforeSet: true,
+      );
+    } on MMKVException catch (error) {
+      encryptedCompareRejected = error.message.contains(
+        'compareBeforeSet cannot be combined with encryption',
+      );
+    }
+    check(
+      'rejects compare-before-set with encryption',
+      encryptedCompareRejected,
+    );
+
+    final aes128 = MMKV(
+      id: '${id}_aes128',
+      path: root.path,
+      encryptionKey: '0123456789012345',
+    );
+    check(
+      'constructor encryption',
+      aes128.isEncrypted && aes128.getString('string') == null,
+    );
     aes128.close();
 
     final intoTarget = Uint8List(16);
@@ -155,7 +284,12 @@ Future<MMKVIntegrationReport> runMMKVIntegrationTests() async {
       closedGuard = true;
     }
     check('closed guard', closedGuard && storage.isClosed);
-    check('exists and delete', existsMMKV(id, path: root.path) && deleteMMKV(id, path: root.path) && !existsMMKV(id, path: root.path));
+    check(
+      'exists and delete',
+      existsMMKV(id, path: root.path) &&
+          deleteMMKV(id, path: root.path) &&
+          !existsMMKV(id, path: root.path),
+    );
 
     await root.delete(recursive: true);
     return MMKVIntegrationReport(passed: true, passedChecks: passedChecks);

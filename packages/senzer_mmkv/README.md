@@ -39,7 +39,7 @@ import 'package:senzer_mmkv/senzer_mmkv.dart';
 
 final storage = createMMKV(id: 'settings');
 storage.set('theme', 'dark');
-storage.set('launchCount', (storage.getNumber('launchCount') ?? 0) + 1);
+storage.setInt64('launchCount', (storage.getInt64('launchCount') ?? 0) + 1);
 storage.set('enabled', true);
 storage.set('token', Uint8List.fromList(<int>[1, 2, 3]));
 storage.setInt64('revision', 9223372036854775807);
@@ -50,7 +50,13 @@ final revision = storage.getInt64('revision');
 storage.close();
 ```
 
-`set` accepts `String`, `bool`, `num`, `Uint8List`, and `List<int>`.
+`set` accepts `String`, `bool`, `int`, `double`, `Uint8List`, and `List<int>`.
+Integers are stored using MMKV's exact signed 64-bit integer type; use
+`setNumber`/`setDouble` to store an IEEE-754 double. Earlier releases routed
+generic integers through the double type, so those stored values are not
+automatically migrated: read them with `getNumber` and rewrite them with
+`setInt64`/`setInt` where appropriate. A historical double integer above
+`2^53 - 1` may already have lost precision.
 
 ## API at a glance
 
@@ -66,6 +72,9 @@ storage.close();
 | Instance lifecycle | `existsMMKV`, `deleteMMKV`, `close` |
 | Custom root | `initializeMMKV`, `path:` |
 | Open options | `readOnly`, `compareBeforeSet`, `recoveryStrategy` |
+
+`compareBeforeSet` is not supported together with encryption: opening with a
+key or later calling `encrypt`/`recrypt` with a non-empty key is rejected.
 
 ## Encryption
 
@@ -138,8 +147,11 @@ simulator can still be used for non-release integration checks.
 
 ## Native design
 
-- The package links Tencent MMKV Core 2.4.2, the mmap-backed C++ engine used by
-  the upstream React Native package.
+- iOS links Tencent MMKV Core 2.4.2. Android uses the `zhongwuzw/MMKV` 2.4.2
+  fork/repack of Tencent MMKV; it retains `armeabi-v7a` support absent from
+  Tencent's published 2.4.2 Android AAR. The Android AAR's headers and Prefab
+  API are checked against the same Tencent 2.4.2 release. See
+  [`android/README.md`](android/README.md) for the ABI guard and upgrade check.
 - Dart calls cross a small pointer-plus-length FFI ABI. Reusable per-instance
   scratch buffers keep hot reads and writes allocation-light.
 - The Dart wrapper does not maintain a second key/value cache; MMKV remains the

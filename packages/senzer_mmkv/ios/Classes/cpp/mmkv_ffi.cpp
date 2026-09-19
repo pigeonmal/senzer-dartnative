@@ -8,10 +8,13 @@
 #include <MMKV/MMBuffer.h>
 #endif
 
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <functional>
 #include <mutex>
+#include <shared_mutex>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -94,9 +97,19 @@ inline void recycleBufferScratch() noexcept {
 }
 
 struct SharedInstance {
+  SharedInstance(std::string instance_key, NativeMMKV* native_value,
+                 size_t handle_references, bool compare_before_set_enabled)
+      : key(std::move(instance_key)),
+        value(native_value),
+        references(handle_references),
+        compare_before_set(compare_before_set_enabled) {}
+
   std::string key;
   NativeMMKV* value = nullptr;
   size_t references = 0;
+  bool compare_before_set = false;
+  std::atomic<bool> closing{false};
+  std::shared_mutex operation_mutex;
 };
 
 struct Handle {
@@ -171,10 +184,98 @@ bool validKey(std::string_view key) {
   return true;
 }
 
-NativeMMKV* value(DNMMKVHandle handle) {
-  auto* typed = static_cast<Handle*>(handle);
-  if (typed == nullptr || typed->shared == nullptr || typed->shared->value == nullptr) return nullptr;
-  return typed->shared->value;
+// A lease keeps the native instance alive for the full duration of each FFI
+// operation. Delete/last-handle close sets closing before taking the exclusive
+// lock, so new operations fail instead of starving teardown while in-flight
+// operations drain.
+class InstanceLease {
+ public:
+  explicit InstanceLease(DNMMKVHandle handle) {
+    auto* typed = static_cast<Handle*>(handle);
+    if (typed == nullptr || typed->shared == nullptr) return;
+    shared_ = typed->shared;
+    if (shared_->closing.load(std::memory_order_acquire)) return;
+    lock_ = std::shared_lock<std::shared_mutex>(shared_->operation_mutex);
+    if (!shared_->closing.load(std::memory_order_acquire)) {
+      instance_ = shared_->value;
+    }
+  }
+
+  NativeMMKV* get() const { return instance_; }
+  bool compareBeforeSet() const {
+    return shared_ != nullptr && shared_->compare_before_set;
+  }
+
+ private:
+  SharedInstance* shared_ = nullptr;
+  std::shared_lock<std::shared_mutex> lock_;
+  NativeMMKV* instance_ = nullptr;
+};
+
+class InstancePairLease {
+ public:
+  InstancePairLease(DNMMKVHandle destination, DNMMKVHandle source) {
+    auto* destination_handle = static_cast<Handle*>(destination);
+    auto* source_handle = static_cast<Handle*>(source);
+    if (destination_handle == nullptr || source_handle == nullptr ||
+        destination_handle->shared == nullptr || source_handle->shared == nullptr) {
+      return;
+    }
+    auto* destination_shared = destination_handle->shared;
+    auto* source_shared = source_handle->shared;
+    if (destination_shared == source_shared) {
+      first_ = destination_shared;
+      if (first_->closing.load(std::memory_order_acquire)) return;
+      first_lock_ = std::shared_lock<std::shared_mutex>(first_->operation_mutex);
+    } else {
+      first_ = std::less<SharedInstance*>{}(destination_shared, source_shared)
+                   ? destination_shared
+                   : source_shared;
+      second_ = first_ == destination_shared ? source_shared : destination_shared;
+      if (first_->closing.load(std::memory_order_acquire) ||
+          second_->closing.load(std::memory_order_acquire)) {
+        return;
+      }
+      first_lock_ = std::shared_lock<std::shared_mutex>(first_->operation_mutex);
+      second_lock_ = std::shared_lock<std::shared_mutex>(second_->operation_mutex);
+    }
+    if (destination_shared->closing.load(std::memory_order_acquire) ||
+        source_shared->closing.load(std::memory_order_acquire)) {
+      return;
+    }
+    destination_ = destination_shared->value;
+    source_ = source_shared->value;
+  }
+
+  NativeMMKV* destination() const { return destination_; }
+  NativeMMKV* source() const { return source_; }
+
+ private:
+  SharedInstance* first_ = nullptr;
+  SharedInstance* second_ = nullptr;
+  std::shared_lock<std::shared_mutex> first_lock_;
+  std::shared_lock<std::shared_mutex> second_lock_;
+  NativeMMKV* destination_ = nullptr;
+  NativeMMKV* source_ = nullptr;
+};
+
+void eraseIfCurrent(SharedInstance* shared) {
+  // Callers hold g_instances_mutex. A deleted instance can outlive its registry
+  // entry while stale handles are being closed, so only erase its own entry.
+  const auto found = g_instances.find(shared->key);
+  if (found != g_instances.end() && found->second == shared) {
+    g_instances.erase(found);
+  }
+}
+
+void closeSharedInstance(SharedInstance* shared) {
+  shared->closing.store(true, std::memory_order_release);
+  std::unique_lock lock(shared->operation_mutex);
+  if (shared->value != nullptr) {
+    shared->value->close();
+    shared->value = nullptr;
+  }
+  eraseIfCurrent(shared);
 }
 
 template <typename Function>
@@ -264,6 +365,10 @@ NativeMMKV* createInstance(const std::string& id, const std::string& root,
     setError("an encryption key requires AES-128 or AES-256.");
     return nullptr;
   }
+  if (compare_before_set && !encryption_key.empty()) {
+    setError("compareBeforeSet cannot be combined with encryption.");
+    return nullptr;
+  }
   const size_t max_key_length = encryption_type == 2 ? 32 : 16;
   if (!encryption_key.empty() && encryption_key.size() != max_key_length) {
     setError(encryption_type == 2 ? "AES-256 encryption keys must be exactly 32 bytes."
@@ -317,7 +422,7 @@ DNMMKVHandle DNMMKVCreate(const uint8_t* id, size_t id_len, const uint8_t* root_
     auto* native = createInstance(id_string, root_string, key_string, encryption_type, mode,
                                    read_only != 0, compare_before_set != 0, recovery_strategy);
     if (native == nullptr) return nullptr;
-    auto* shared = new SharedInstance{key, native, 1};
+    auto* shared = new SharedInstance(key, native, 1, compare_before_set != 0);
     g_instances.emplace(key, shared);
     return new Handle{shared};
   } catch (const std::exception& error) {
@@ -332,14 +437,19 @@ DNMMKVHandle DNMMKVCreate(const uint8_t* id, size_t id_len, const uint8_t* root_
 void DNMMKVDestroy(DNMMKVHandle handle) {
   auto* typed = static_cast<Handle*>(handle);
   if (typed == nullptr) return;
-  std::lock_guard lock(g_instances_mutex);
-  if (typed->shared != nullptr && typed->shared->references > 0) {
-    typed->shared->references--;
-    if (typed->shared->references == 0) {
-      if (typed->shared->value != nullptr) typed->shared->value->close();
-      g_instances.erase(typed->shared->key);
-      delete typed->shared;
+  try {
+    std::lock_guard lock(g_instances_mutex);
+    if (typed->shared != nullptr && typed->shared->references > 0) {
+      typed->shared->references--;
+      if (typed->shared->references == 0) {
+        closeSharedInstance(typed->shared);
+        delete typed->shared;
+      }
     }
+  } catch (const std::exception& error) {
+    setError(error.what());
+  } catch (...) {
+    setError("Unknown MMKV destroy error.");
   }
   delete typed;
 }
@@ -347,7 +457,8 @@ void DNMMKVDestroy(DNMMKVHandle handle) {
 int32_t DNMMKVSetString(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
                         const uint8_t* input, size_t input_len) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
     if (!validKey(key_view)) return kInvalidArgument;
@@ -357,7 +468,8 @@ int32_t DNMMKVSetString(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
 
 int32_t DNMMKVSetBoolean(DNMMKVHandle handle, const uint8_t* key, size_t key_len, int32_t input) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr || (input != 0 && input != 1)) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
     if (!validKey(key_view)) return kInvalidArgument;
@@ -367,7 +479,8 @@ int32_t DNMMKVSetBoolean(DNMMKVHandle handle, const uint8_t* key, size_t key_len
 
 int32_t DNMMKVSetNumber(DNMMKVHandle handle, const uint8_t* key, size_t key_len, double input) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
     if (!validKey(key_view)) return kInvalidArgument;
@@ -377,7 +490,8 @@ int32_t DNMMKVSetNumber(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
 
 int32_t DNMMKVSetInt64(DNMMKVHandle handle, const uint8_t* key, size_t key_len, int64_t input) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
     if (!validKey(key_view)) return kInvalidArgument;
@@ -388,7 +502,8 @@ int32_t DNMMKVSetInt64(DNMMKVHandle handle, const uint8_t* key, size_t key_len, 
 int32_t DNMMKVSetBuffer(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
                         const uint8_t* input, size_t input_len) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr || (input_len != 0 && input == nullptr)) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
     if (!validKey(key_view)) return kInvalidArgument;
@@ -403,7 +518,8 @@ int32_t DNMMKVSetBuffer(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
 int32_t DNMMKVGetString(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
                         uint8_t** output, size_t* output_len) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr || output == nullptr || output_len == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
     if (!validKey(key_view)) return kInvalidArgument;
@@ -418,7 +534,8 @@ int32_t DNMMKVGetString(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
 
 int32_t DNMMKVGetBoolean(DNMMKVHandle handle, const uint8_t* key, size_t key_len, int32_t* output) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr || output == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
     if (!validKey(key_view)) return kInvalidArgument;
@@ -432,7 +549,8 @@ int32_t DNMMKVGetBoolean(DNMMKVHandle handle, const uint8_t* key, size_t key_len
 
 int32_t DNMMKVGetNumber(DNMMKVHandle handle, const uint8_t* key, size_t key_len, double* output) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr || output == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
     if (!validKey(key_view)) return kInvalidArgument;
@@ -446,7 +564,8 @@ int32_t DNMMKVGetNumber(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
 
 int32_t DNMMKVGetInt64(DNMMKVHandle handle, const uint8_t* key, size_t key_len, int64_t* output) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr || output == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
     if (!validKey(key_view)) return kInvalidArgument;
@@ -461,7 +580,8 @@ int32_t DNMMKVGetInt64(DNMMKVHandle handle, const uint8_t* key, size_t key_len, 
 int32_t DNMMKVGetBuffer(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
                         uint8_t** output, size_t* output_len) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr || output == nullptr || output_len == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
     if (!validKey(key_view)) return kInvalidArgument;
@@ -476,7 +596,8 @@ int32_t DNMMKVGetBuffer(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
 int32_t DNMMKVGetStringInto(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
                             uint8_t* output, size_t output_capacity, size_t* output_len) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr || output_len == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
     if (!validKey(key_view)) return kInvalidArgument;
@@ -494,7 +615,8 @@ int32_t DNMMKVGetStringInto(DNMMKVHandle handle, const uint8_t* key, size_t key_
 int32_t DNMMKVGetBufferInto(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
                             uint8_t* output, size_t output_capacity, size_t* output_len) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr || output_len == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
     if (!validKey(key_view)) return kInvalidArgument;
@@ -508,7 +630,8 @@ int32_t DNMMKVGetBufferInto(DNMMKVHandle handle, const uint8_t* key, size_t key_
 int32_t DNMMKVGetStringView(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
                             const uint8_t** output, size_t* output_len) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr || output == nullptr || output_len == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
     if (!validKey(key_view)) return kInvalidArgument;
@@ -531,7 +654,8 @@ int32_t DNMMKVGetStringView(DNMMKVHandle handle, const uint8_t* key, size_t key_
 int32_t DNMMKVGetBufferView(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
                             const uint8_t** output, size_t* output_len) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr || output == nullptr || output_len == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
     if (!validKey(key_view)) return kInvalidArgument;
@@ -551,7 +675,8 @@ int32_t DNMMKVGetBufferView(DNMMKVHandle handle, const uint8_t* key, size_t key_
 
 int32_t DNMMKVContains(DNMMKVHandle handle, const uint8_t* key, size_t key_len) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
     if (!validKey(key_view)) return kInvalidArgument;
@@ -561,7 +686,8 @@ int32_t DNMMKVContains(DNMMKVHandle handle, const uint8_t* key, size_t key_len) 
 
 int32_t DNMMKVGetKeyCount(DNMMKVHandle handle, size_t* count) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr || count == nullptr) return kInvalidArgument;
     *count = instance->count();
     return kOk;
@@ -570,7 +696,8 @@ int32_t DNMMKVGetKeyCount(DNMMKVHandle handle, size_t* count) {
 
 int32_t DNMMKVGetKeyAt(DNMMKVHandle handle, size_t index, uint8_t** output, size_t* output_len) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr || output == nullptr || output_len == nullptr) return kInvalidArgument;
     const auto keys = instance->allKeys();
     if (index >= keys.size()) return kMissing;
@@ -580,7 +707,8 @@ int32_t DNMMKVGetKeyAt(DNMMKVHandle handle, size_t index, uint8_t** output, size
 
 int32_t DNMMKVGetAllKeys(DNMMKVHandle handle, uint8_t** output, size_t* output_len) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr || output == nullptr || output_len == nullptr) return kInvalidArgument;
     const auto keys = instance->allKeys();
     size_t total = 0;
@@ -611,7 +739,8 @@ int32_t DNMMKVGetAllKeys(DNMMKVHandle handle, uint8_t** output, size_t* output_l
 
 int32_t DNMMKVRemove(DNMMKVHandle handle, const uint8_t* key, size_t key_len, int32_t* removed) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr || removed == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
     if (!validKey(key_view)) return kInvalidArgument;
@@ -626,7 +755,8 @@ int32_t DNMMKVRemove(DNMMKVHandle handle, const uint8_t* key, size_t key_len, in
 
 int32_t DNMMKVClearAll(DNMMKVHandle handle) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr) return kInvalidArgument;
     if (instance->isReadOnly()) return kOk;
     instance->clearAll();
@@ -636,7 +766,8 @@ int32_t DNMMKVClearAll(DNMMKVHandle handle) {
 
 int32_t DNMMKVTrim(DNMMKVHandle handle) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr) return kInvalidArgument;
     if (instance->isReadOnly()) return kOk;
     instance->trim();
@@ -647,8 +778,9 @@ int32_t DNMMKVTrim(DNMMKVHandle handle) {
 
 int32_t DNMMKVImportAll(DNMMKVHandle destination, DNMMKVHandle source, size_t* imported) {
   return guarded([&] {
-    auto* target = value(destination);
-    auto* origin = value(source);
+    InstancePairLease lease(destination, source);
+    auto* target = lease.destination();
+    auto* origin = lease.source();
     if (target == nullptr || origin == nullptr || imported == nullptr) return kInvalidArgument;
     if (target == origin) {
       *imported = 0;
@@ -664,28 +796,65 @@ int32_t DNMMKVImportAll(DNMMKVHandle destination, DNMMKVHandle source, size_t* i
 }
 
 uint64_t DNMMKVByteSize(DNMMKVHandle handle) {
-  auto* instance = value(handle);
-  return instance == nullptr ? 0 : static_cast<uint64_t>(instance->actualSize());
+  try {
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
+    return instance == nullptr ? 0 : static_cast<uint64_t>(instance->actualSize());
+  } catch (const std::exception& error) {
+    setError(error.what());
+    return 0;
+  } catch (...) {
+    setError("Unknown MMKV byte-size error.");
+    return 0;
+  }
 }
 
 uint64_t DNMMKVLength(DNMMKVHandle handle) {
-  auto* instance = value(handle);
-  return instance == nullptr ? 0 : static_cast<uint64_t>(instance->count());
+  try {
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
+    return instance == nullptr ? 0 : static_cast<uint64_t>(instance->count());
+  } catch (const std::exception& error) {
+    setError(error.what());
+    return 0;
+  } catch (...) {
+    setError("Unknown MMKV length error.");
+    return 0;
+  }
 }
 
 int32_t DNMMKVIsReadOnly(DNMMKVHandle handle) {
-  auto* instance = value(handle);
-  return instance == nullptr ? kInvalidArgument : (instance->isReadOnly() ? 1 : 0);
+  try {
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
+    return instance == nullptr ? kInvalidArgument : (instance->isReadOnly() ? 1 : 0);
+  } catch (const std::exception& error) {
+    setError(error.what());
+    return kIoError;
+  } catch (...) {
+    setError("Unknown MMKV read-only state error.");
+    return kIoError;
+  }
 }
 
 int32_t DNMMKVIsEncrypted(DNMMKVHandle handle) {
-  auto* instance = value(handle);
-  return instance == nullptr ? kInvalidArgument : (instance->isEncryptionEnabled() ? 1 : 0);
+  try {
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
+    return instance == nullptr ? kInvalidArgument : (instance->isEncryptionEnabled() ? 1 : 0);
+  } catch (const std::exception& error) {
+    setError(error.what());
+    return kIoError;
+  } catch (...) {
+    setError("Unknown MMKV encryption state error.");
+    return kIoError;
+  }
 }
 
 int32_t DNMMKVCheckContentChanged(DNMMKVHandle handle) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr) return kInvalidArgument;
     instance->checkContentChanged();
     return kOk;
@@ -694,7 +863,8 @@ int32_t DNMMKVCheckContentChanged(DNMMKVHandle handle) {
 
 int32_t DNMMKVClearMemoryCache(DNMMKVHandle handle) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr) return kInvalidArgument;
     instance->clearMemoryCache();
     return kOk;
@@ -704,8 +874,13 @@ int32_t DNMMKVClearMemoryCache(DNMMKVHandle handle) {
 int32_t DNMMKVRecrypt(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
                       int32_t encryption_type) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr) return kInvalidArgument;
+    if (lease.compareBeforeSet() && key_len != 0) {
+      setError("compareBeforeSet cannot be combined with encryption.");
+      return kInvalidArgument;
+    }
     if (instance->isReadOnly()) return kReadOnly;
     auto key_string = toString(key, key_len);
     WipeOnExit wipe_key(key_string);
@@ -749,9 +924,7 @@ int32_t DNMMKVDelete(const uint8_t* id, size_t id_len, const uint8_t* root_path,
     std::lock_guard lock(g_instances_mutex);
     const auto key = instanceKey(id_string, root_string);
     if (auto found = g_instances.find(key); found != g_instances.end()) {
-      if (found->second->value != nullptr) found->second->value->close();
-      found->second->value = nullptr;
-      g_instances.erase(found);
+      closeSharedInstance(found->second);
     }
     return NativeMMKV::removeStorage(id_string, root_string.empty() ? nullptr : &root_string) ? 1 : 0;
   });
@@ -777,7 +950,8 @@ int32_t DNMMKVProfileNoop(DNMMKVHandle, const uint8_t*, size_t, const uint8_t*, 
 int32_t DNMMKVProfileValidate(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
                               const uint8_t* val, size_t val_len) {
   return guarded([&] {
-    auto* instance = value(handle);
+    InstanceLease lease(handle);
+    auto* instance = lease.get();
     if (instance == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
     if (!validKey(key_view)) return kInvalidArgument;

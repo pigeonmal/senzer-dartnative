@@ -12,13 +12,21 @@ buildscript {
 apply plugin: 'com.android.library'
 apply plugin: 'org.jetbrains.kotlin.android'
 
+repositories {
+  google()
+  mavenCentral()
+}
+
+def mmkvForkDependency = 'io.github.zhongwuzw:mmkv:2.4.2'
+
 android {
   namespace 'com.senzer.mmkv'
   compileSdk 36
   buildFeatures { prefab true }
 
-  // Tencent's MMKV AAR already supplies libc++_shared for every ABI. Do not
-  // package a second copy from this plugin's CMake externalNativeBuild.
+  // The intentional zhongwuzw fork/repack AAR supplies libc++_shared for all
+  // four supported ABIs, including armeabi-v7a. Do not package a second copy
+  // from this plugin's CMake externalNativeBuild.
   packagingOptions {
     jniLibs {
       excludes += ['**/libc++_shared.so']
@@ -50,5 +58,57 @@ android {
 // publishable and usable from dn plugin build.
 dependencies {
   implementation 'org.jetbrains.kotlin:kotlin-stdlib:2.2.20'
-  implementation 'io.github.zhongwuzw:mmkv:2.4.2'
+  // Intentional Tencent MMKV 2.4.2 fork/repack: unlike Tencent's published
+  // 2.4.2 AAR, this artifact retains armeabi-v7a. See android/README.md.
+  implementation mmkvForkDependency
+}
+
+tasks.register('verifyMmkvForkAbis') {
+  group = 'verification'
+  description = 'Checks the MMKV fork AAR retains native libraries for every supported Android ABI.'
+
+  doLast {
+    // A detached configuration validates the declared fork AAR without
+    // requiring app-level flags such as android.useAndroidX in this library.
+    def mmkvAarConfiguration = project.configurations.detachedConfiguration(
+      project.dependencies.create(mmkvForkDependency)
+    )
+    def mmkvArtifact = mmkvAarConfiguration.resolvedConfiguration.resolvedArtifacts.find { artifact ->
+      artifact.moduleVersion.id.group == 'io.github.zhongwuzw' &&
+        artifact.name == 'mmkv' &&
+        artifact.moduleVersion.id.version == '2.4.2'
+    }
+    if (mmkvArtifact == null) {
+      throw new GradleException('Expected io.github.zhongwuzw:mmkv:2.4.2 for ABI verification.')
+    }
+
+    def requiredAbis = ['armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64']
+    def requiredEntries = ['prefab/modules/mmkv/include/MMKV/MMKV.h',
+                           'prefab/modules/mmkv/include/MMKV/MMBuffer.h',
+                           'prefab/modules/mmkv/include/MMKV/MMKVPredef.h',
+                           'prefab/modules/mmkv/module.json']
+    def aar = new java.util.zip.ZipFile(mmkvArtifact.file)
+    try {
+      requiredAbis.each { abi ->
+        ['libmmkv.so', 'libc++_shared.so'].each { library ->
+          def entryName = "jni/${abi}/${library}"
+          if (aar.getEntry(entryName) == null) {
+            throw new GradleException("MMKV fork AAR is missing ${entryName}.")
+          }
+        }
+      }
+      requiredEntries.each { entryName ->
+        if (aar.getEntry(entryName) == null) {
+          throw new GradleException("MMKV fork AAR is missing Prefab API file ${entryName}.")
+        }
+      }
+      logger.lifecycle("Verified ${mmkvArtifact.file.name}: MMKV and libc++ libraries for ${requiredAbis.join(', ')}.")
+    } finally {
+      aar.close()
+    }
+  }
+}
+
+tasks.matching { it.name == 'check' }.configureEach {
+  dependsOn tasks.named('verifyMmkvForkAbis')
 }

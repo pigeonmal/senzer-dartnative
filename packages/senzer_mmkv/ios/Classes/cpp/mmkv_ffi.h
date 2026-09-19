@@ -31,6 +31,9 @@ DNMMKV_EXPORT DNMMKVHandle DNMMKVCreate(const uint8_t* id, size_t id_len,
                                         const uint8_t* encryption_key, size_t encryption_key_len,
                                         int32_t encryption_type, int32_t mode, int32_t read_only,
                                         int32_t compare_before_set, int32_t recovery_strategy);
+// Destroy releases one handle. The shared native instance closes after its
+// last handle is released; handles invalidated by DNMMKVDelete remain safe to
+// destroy and cannot remove a newer instance registered for the same key.
 DNMMKV_EXPORT void DNMMKVDestroy(DNMMKVHandle handle);
 DNMMKV_EXPORT int32_t DNMMKVSetString(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
                                       const uint8_t* value, size_t value_len);
@@ -93,6 +96,8 @@ DNMMKV_EXPORT int32_t DNMMKVRecrypt(DNMMKVHandle handle, const uint8_t* key, siz
                                     int32_t encryption_type);
 DNMMKV_EXPORT int32_t DNMMKVExists(const uint8_t* id, size_t id_len, const uint8_t* root_path,
                                    size_t root_path_len);
+// Delete closes a matching open instance, waits for its in-flight operations,
+// invalidates all handles to that instance, then removes its persisted files.
 DNMMKV_EXPORT int32_t DNMMKVDelete(const uint8_t* id, size_t id_len, const uint8_t* root_path,
                                    size_t root_path_len);
 DNMMKV_EXPORT int32_t DNMMKVSetDefaultRootPath(const uint8_t* path, size_t path_len);

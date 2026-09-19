@@ -107,9 +107,7 @@ final class MMKV implements Finalizable {
     _validateInstanceId(id);
     _validateRootPath(path);
     final idBytes = utf8.encode(id);
-    final pathBytes = path == null
-        ? Uint8List(0)
-        : utf8.encode(path);
+    final pathBytes = path == null ? Uint8List(0) : utf8.encode(path);
     final keyBytes = encryptionKey == null
         ? Uint8List(0)
         : utf8.encode(encryptionKey);
@@ -119,6 +117,11 @@ final class MMKV implements Finalizable {
       encryptionType,
       allowEmpty: true,
     );
+    if (compareBeforeSet && keyBytes.isNotEmpty) {
+      throw const MMKVException(
+        'compareBeforeSet cannot be combined with encryption.',
+      );
+    }
     SenzerMMKVBindings.requireLoaded();
     final idPointer = SenzerMMKVBindings.allocateBytes(idBytes);
     final pathPointer = SenzerMMKVBindings.allocateBytes(pathBytes);
@@ -181,16 +184,18 @@ final class MMKV implements Finalizable {
     return _keyScratch.writeUtf8(key);
   }
 
+  /// Stores a typed value. Dart [int] values use exact signed 64-bit storage;
+  /// use [setNumber] when the value should be stored as an IEEE-754 double.
   void set(String key, Object value) {
     switch (value) {
       case String text:
         setString(key, text);
       case bool boolean:
         setBoolean(key, boolean);
+      case int i:
+        setInt64(key, i);
       case double d:
         setNumber(key, d);
-      case int i:
-        setNumber(key, i);
       case Uint8List buffer:
         setBuffer(key, buffer);
       case List<int> buffer:
@@ -230,7 +235,7 @@ final class MMKV implements Finalizable {
     _notify(key);
   }
 
-  /// Stores a floating-point or integer number without polymorphic dispatch.
+  /// Stores a number as an IEEE-754 double without polymorphic dispatch.
   void setNumber(String key, num value) {
     _ensureOpen();
     final keyLength = _prepareKey(key);
@@ -623,6 +628,11 @@ final class MMKV implements Finalizable {
     final key = encryptionKey == null
         ? Uint8List(0)
         : utf8.encode(encryptionKey);
+    if (compareBeforeSet && key.isNotEmpty) {
+      throw const MMKVException(
+        'compareBeforeSet cannot be combined with encryption.',
+      );
+    }
     _validateEncryptionKey(
       key.length,
       encryptionKey,
@@ -729,9 +739,7 @@ bool existsMMKV(String id, {String? path}) {
   _validateRootPath(path);
   SenzerMMKVBindings.requireLoaded();
   final idBytes = utf8.encode(id);
-  final pathBytes = path == null
-      ? Uint8List(0)
-      : utf8.encode(path);
+  final pathBytes = path == null ? Uint8List(0) : utf8.encode(path);
   final idPointer = SenzerMMKVBindings.allocateBytes(idBytes);
   final pathPointer = SenzerMMKVBindings.allocateBytes(pathBytes);
   try {
@@ -751,14 +759,15 @@ bool existsMMKV(String id, {String? path}) {
   }
 }
 
+/// Deletes an instance, waiting for its current native operations to finish.
+/// Every open handle for that instance becomes invalid; those handles may
+/// still be closed normally. A subsequent [MMKV] open creates a fresh instance.
 bool deleteMMKV(String id, {String? path}) {
   _validateInstanceId(id);
   _validateRootPath(path);
   SenzerMMKVBindings.requireLoaded();
   final idBytes = utf8.encode(id);
-  final pathBytes = path == null
-      ? Uint8List(0)
-      : utf8.encode(path);
+  final pathBytes = path == null ? Uint8List(0) : utf8.encode(path);
   final idPointer = SenzerMMKVBindings.allocateBytes(idBytes);
   final pathPointer = SenzerMMKVBindings.allocateBytes(pathBytes);
   try {

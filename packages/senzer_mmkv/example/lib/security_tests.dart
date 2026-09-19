@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 
@@ -356,25 +358,80 @@ Future<MMKVSecurityReport> runMMKVSecurityTests() async {
       'shared handles see the same value',
       second.getString('before-delete') == 'value',
     );
-    check(
-      'deleting an open instance is reported',
-      deleteMMKV(sharedId, path: root.path),
-    );
-    expectMMKVError(
-      'stale sibling handle fails closed after deletion',
-      () => second.getString('before-delete'),
-    );
-    first.close();
-    second.close();
-    final reopened = MMKV(id: sharedId, path: root.path);
+    final raceMessages = ReceivePort();
+    final raceReady = Completer<void>();
+    final raceDone = Completer<Map<Object?, Object?>>();
+    raceMessages.listen((message) {
+      if (message is! Map) return;
+      final event = Map<Object?, Object?>.from(message);
+      if (event['type'] == 'ready' && !raceReady.isCompleted) {
+        raceReady.complete();
+      } else if (event['type'] == 'done') {
+        if (!raceReady.isCompleted) raceReady.complete();
+        if (!raceDone.isCompleted) raceDone.complete(event);
+      }
+    });
+    Isolate? raceWorker;
+    MMKV? reopened;
+    MMKV? reopenedSibling;
     try {
+      raceWorker = await Isolate.spawn<List<Object?>>(
+        _deleteRaceWorker,
+        <Object?>[sharedId, root.path, raceMessages.sendPort],
+      );
+      await raceReady.future.timeout(const Duration(seconds: 5));
+      final deleted = deleteMMKV(sharedId, path: root.path);
+      reopened = MMKV(id: sharedId, path: root.path);
       reopened.setString('after-delete', 'fresh');
+      expectMMKVError(
+        'stale first handle fails closed after deletion',
+        () => first.getString('before-delete'),
+        code: -1,
+      );
+      expectMMKVError(
+        'stale sibling handle fails closed after deletion',
+        () => second.getString('before-delete'),
+        code: -1,
+      );
+      first.close();
+      second.close();
+      final raceResult = await raceDone.future.timeout(
+        const Duration(seconds: 10),
+      );
       check(
-        'reopens cleanly after deleting an open instance',
+        'delete drains concurrent read/write and rejects stale operations',
+        deleted &&
+            raceResult['deleteObserved'] == true &&
+            (raceResult['successfulReads'] as int) > 0 &&
+            (raceResult['successfulWrites'] as int) > 0 &&
+            raceResult['failure'] == null,
+      );
+      check(
+        'reopened instance remains valid after stale handles close',
         reopened.getString('after-delete') == 'fresh',
       );
-    } finally {
+      reopenedSibling = MMKV(id: sharedId, path: root.path);
+      check(
+        'new handles share the reopened instance',
+        reopenedSibling.getString('after-delete') == 'fresh',
+      );
       reopened.close();
+      check(
+        'reopened sibling remains valid after the first new handle closes',
+        reopenedSibling.getString('after-delete') == 'fresh',
+      );
+      reopenedSibling.setString('after-sibling-close', 'still-open');
+      check(
+        'new sibling can still write after the first new handle closes',
+        reopenedSibling.getString('after-sibling-close') == 'still-open',
+      );
+    } finally {
+      raceWorker?.kill(priority: Isolate.immediate);
+      raceMessages.close();
+      first.close();
+      second.close();
+      reopened?.close();
+      reopenedSibling?.close();
       deleteMMKV(sharedId, path: root.path);
     }
 
@@ -403,6 +460,66 @@ Future<MMKVSecurityReport> runMMKVSecurityTests() async {
     if (root != null && await root.exists()) {
       await root.delete(recursive: true);
     }
+  }
+}
+
+@pragma('vm:entry-point')
+Future<void> _deleteRaceWorker(List<Object?> arguments) async {
+  final id = arguments[0] as String;
+  final path = arguments[1] as String;
+  final replyPort = arguments[2] as SendPort;
+  MMKV? storage;
+  var successfulReads = 0;
+  var successfulWrites = 0;
+  var deleteObserved = false;
+  String? failure;
+
+  try {
+    storage = MMKV(id: id, path: path);
+    final payload = Uint8List.fromList(
+      List<int>.generate(16 * 1024, (index) => index & 0xff),
+    );
+    storage.setBuffer('delete-race-payload', payload);
+    successfulWrites++;
+    final initial = storage.getBuffer('delete-race-payload');
+    if (initial == null || initial.length != payload.length) {
+      throw StateError('initial race payload read did not round-trip');
+    }
+    successfulReads++;
+    replyPort.send(<String, Object?>{'type': 'ready'});
+
+    for (var index = 0; index < 2048; index++) {
+      final value = storage.getBuffer('delete-race-payload');
+      if (value == null ||
+          value.length != payload.length ||
+          value.first != payload.first ||
+          value.last != payload.last) {
+        throw StateError('race payload changed during read/write loop');
+      }
+      successfulReads++;
+      storage.setBuffer('delete-race-payload', payload);
+      successfulWrites++;
+      if (index % 16 == 15) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+    }
+  } on MMKVException catch (error) {
+    if (error.code == -1) {
+      deleteObserved = true;
+    } else {
+      failure = error.toString();
+    }
+  } catch (error) {
+    failure = error.toString();
+  } finally {
+    storage?.close();
+    replyPort.send(<String, Object?>{
+      'type': 'done',
+      'successfulReads': successfulReads,
+      'successfulWrites': successfulWrites,
+      'deleteObserved': deleteObserved,
+      'failure': failure,
+    });
   }
 }
 

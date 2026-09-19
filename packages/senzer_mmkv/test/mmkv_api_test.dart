@@ -30,6 +30,26 @@ void main() {
     );
   });
 
+  test(
+    'rejects compare-before-set with encryption before loading native code',
+    () {
+      expect(
+        () => MMKV(
+          id: 'encrypted-compare-before-set',
+          encryptionKey: '0123456789abcdef',
+          compareBeforeSet: true,
+        ),
+        throwsA(
+          isA<MMKVException>().having(
+            (error) => error.message,
+            'message',
+            contains('compareBeforeSet cannot be combined with encryption'),
+          ),
+        ),
+      );
+    },
+  );
+
   test('exposes AES-128/AES-256 and recovery options', () {
     expect(MMKVEncryptionType.values, hasLength(2));
     expect(MMKVRecoveryStrategy.values, hasLength(2));
