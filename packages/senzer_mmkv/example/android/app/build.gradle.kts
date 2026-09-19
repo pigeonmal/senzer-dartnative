@@ -24,7 +24,8 @@ android {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.senzer.mmkv.example.senzer_mmkv_example"
         // You can update the following values to match your application needs.
-        minSdk = dartnative.minSdkVersion
+        // dartnative_shared_preferences currently declares Android API 26.
+        minSdk = maxOf(dartnative.minSdkVersion, 26)
         targetSdk = dartnative.targetSdkVersion
         versionCode = dartnative.versionCode
         versionName = dartnative.versionName

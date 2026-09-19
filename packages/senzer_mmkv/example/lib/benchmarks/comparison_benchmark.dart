@@ -1,7 +1,7 @@
 import 'benchmark_types.dart';
 import 'hive_benchmark.dart';
 import 'mmkv_benchmark.dart';
-import 'sqlite_benchmark.dart';
+import 'shared_preferences_benchmark.dart';
 
 final class BenchmarkStoreResult {
   const BenchmarkStoreResult({required this.store, required this.rows});
@@ -18,8 +18,8 @@ Future<List<BenchmarkStoreResult>> runStorageBenchmarks() async {
       rows: await runHiveBenchmarks(),
     ),
     BenchmarkStoreResult(
-      store: 'dartnative_sqlite',
-      rows: await runSqliteBenchmarks(),
+      store: 'dartnative_shared_preferences',
+      rows: await runSharedPreferencesBenchmarks(),
     ),
   ];
 }

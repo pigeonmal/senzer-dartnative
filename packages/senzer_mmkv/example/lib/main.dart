@@ -7,8 +7,8 @@ import 'benchmarks/comparison_benchmark.dart';
 import 'benchmarks/path_profiler.dart';
 
 void main() {
-  // This must be the first application call so the MMKV FFI symbols and
-  // Android plugin lifecycle are ready before the integration suite runs.
+  // This must be the first application call so the MMKV and benchmark plugin
+  // FFI symbols are ready before the integration suite and benchmarks run.
   DartNativePluginRegistrant.registerAll();
   runApp(const MMKVExampleApp());
 }

@@ -13,6 +13,7 @@
 // overwriting it.
 //
 // Plugins loaded:
+//   • dartnative_shared_preferences
 //   • senzer_mmkv
 
 import 'dart:io' show Platform;
@@ -20,6 +21,7 @@ import 'dart:io' show Platform;
 import 'package:dartnative/dartnative.dart';
 import 'package:dartnative_ios/dartnative_ios.dart';
 import 'package:dartnative_android/dartnative_android.dart';
+import 'package:dartnative_shared_preferences/dartnative_shared_preferences.dart';
 import 'package:senzer_mmkv/senzer_mmkv.dart';
 
 abstract final class DartNativePluginRegistrant {
@@ -40,7 +42,7 @@ abstract final class DartNativePluginRegistrant {
     }
     DartNativeLicense.instance.reportPluginUsage(const <String>[
       'dartnative_hive',
-      'dartnative_sqlite',
+      'dartnative_shared_preferences',
       'senzer_mmkv',
     ]);
     registerNativeBindings(
@@ -48,6 +50,9 @@ abstract final class DartNativePluginRegistrant {
           ? AndroidNativeBindings.instance
           : IOSNativeBindings.instance,
     );
+    _load('dartnative_shared_preferences', () {
+      PrefsBindings.loadSymbols();
+    });
     _load('senzer_mmkv', () {
       SenzerMMKVBindings.loadSymbols();
     });
