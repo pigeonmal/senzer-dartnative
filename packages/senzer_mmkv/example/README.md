@@ -16,10 +16,11 @@ The app runs the complete native integration suite from
 `lib/benchmarks/` for `senzer_mmkv`, `dartnative_hive`, and
 `dartnative_shared_preferences`. Watch for `[MMKV_TEST] ALL PASS`,
 `[MMKV_BENCH]`, `[HIVE_BENCH]`, and `[SHARED_PREFERENCES_BENCH]` in the native
-output. Hive and Shared Preferences are comparison-only app dependencies;
-they are not dependencies of the package. Shared Preferences does not expose a
-binary value type, so its 256-byte buffer cases serialize the payload as
-base64 text and include that conversion cost.
+output. `dartnative_hive` and `dartnative_shared_preferences` are
+comparison-only app dependencies; they are not dependencies of the package.
+`dartnative_shared_preferences` does not expose a binary value type, so its
+256-byte buffer cases serialize the payload as base64 text and include that
+conversion cost.
 
 Use a physical iOS device for a release benchmark. DartNative currently rejects
 Release/Profile AOT builds for iOS simulators, although a simulator remains

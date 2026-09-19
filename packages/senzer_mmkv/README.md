@@ -101,8 +101,8 @@ two warm-up rounds and seven measured rounds per case, averaged across two
 independent release launches on an **Android Xiaomi Pad 6** (Android 14,
 `arm64-v8a`). The full workload, values, and reproduction notes are in
 [`docs/benchmarks/android-xiaomi-pad-6.md`](../../docs/benchmarks/android-xiaomi-pad-6.md).
-Hive and DartNative Shared Preferences are comparison-only dependencies of the
-example app. The React Native MMKV rows in that document remain the previously
+`dartnative_hive` and `dartnative_shared_preferences` are comparison-only
+dependencies of the example app. The React Native MMKV rows in that document remain the previously
 recorded baseline from a fresh React Native `0.87.1` TypeScript app with
 `react-native-mmkv` `4.3.2`; they were not rerun.
 
