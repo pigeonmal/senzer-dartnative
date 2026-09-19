@@ -68,6 +68,8 @@ inline bool isAsciiFast(const char* data, size_t len) noexcept {
 }
 
 thread_local std::string g_last_error;
+void setError(const char* message) { g_last_error = message == nullptr ? "" : message; }
+
 // DartNative's synchronous FFI calls run to completion before the next call on
 // an isolate. Reuse the decode buffer on that native thread so string reads do
 // not allocate a temporary std::string for every operation. The buffer is
@@ -103,8 +105,6 @@ struct Handle {
 
 std::mutex g_instances_mutex;
 std::unordered_map<std::string, SharedInstance*> g_instances;
-
-void setError(const char* message) { g_last_error = message == nullptr ? "" : message; }
 
 void wipe(std::string& value) noexcept {
   volatile char* bytes = value.empty() ? nullptr : value.data();
@@ -144,8 +144,31 @@ std::string instanceKey(const std::string& id, const std::string& root) {
 }
 
 bool validId(const std::string& id) {
-  return !id.empty() && id != "." && id != ".." && id.find('/') == std::string::npos &&
-         id.find('\\') == std::string::npos;
+  if (id.empty() || id == "." || id == ".." || id.find('/') != std::string::npos ||
+      id.find('\\') != std::string::npos) {
+    return false;
+  }
+  for (const auto byte : id) {
+    const auto value = static_cast<unsigned char>(byte);
+    if (value < 0x20 || value == 0x7f) return false;
+  }
+  return true;
+}
+
+bool validRootPath(const std::string& path) {
+  for (const auto byte : path) {
+    const auto value = static_cast<unsigned char>(byte);
+    if (value < 0x20 || value == 0x7f) return false;
+  }
+  return true;
+}
+
+bool validKey(std::string_view key) {
+  if (key.empty() || key.find('\0') != std::string_view::npos) {
+    setError("key must not be empty or contain a NUL character.");
+    return false;
+  }
+  return true;
 }
 
 NativeMMKV* value(DNMMKVHandle handle) {
@@ -221,6 +244,10 @@ NativeMMKV* createInstance(const std::string& id, const std::string& root,
     setError("id must be a non-empty filename-safe value.");
     return nullptr;
   }
+  if (!validRootPath(root)) {
+    setError("root path contains an unsafe control character.");
+    return nullptr;
+  }
   if (!ensureInitialized(root)) {
     setError("MMKV has not been initialized with a default root path.");
     return nullptr;
@@ -233,10 +260,14 @@ NativeMMKV* createInstance(const std::string& id, const std::string& root,
     setError("encryptionType cannot be set without an encryption key.");
     return nullptr;
   }
+  if (!encryption_key.empty() && encryption_type == 0) {
+    setError("an encryption key requires AES-128 or AES-256.");
+    return nullptr;
+  }
   const size_t max_key_length = encryption_type == 2 ? 32 : 16;
-  if (encryption_key.size() > max_key_length) {
-    setError(encryption_type == 2 ? "AES-256 encryption keys cannot exceed 32 bytes."
-                                 : "AES-128 encryption keys cannot exceed 16 bytes.");
+  if (!encryption_key.empty() && encryption_key.size() != max_key_length) {
+    setError(encryption_type == 2 ? "AES-256 encryption keys must be exactly 32 bytes."
+                                 : "AES-128 encryption keys must be exactly 16 bytes.");
     return nullptr;
   }
   if (recovery_strategy < 0 || recovery_strategy > 2) {
@@ -270,6 +301,10 @@ DNMMKVHandle DNMMKVCreate(const uint8_t* id, size_t id_len, const uint8_t* root_
     WipeOnExit wipe_key(key_string);
     if (!validId(id_string)) {
       setError("id must be a non-empty filename-safe value.");
+      return nullptr;
+    }
+    if (!validRootPath(root_string)) {
+      setError("root path contains an unsafe control character.");
       return nullptr;
     }
     if (!ensureInitialized(root_string)) return nullptr;
@@ -315,7 +350,7 @@ int32_t DNMMKVSetString(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
     auto* instance = value(handle);
     if (instance == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
-    if (key_view.empty()) return kInvalidArgument;
+    if (!validKey(key_view)) return kInvalidArgument;
     return instance->set(toView(input, input_len), key_view) ? kOk : writeFailure(instance);
   });
 }
@@ -325,7 +360,7 @@ int32_t DNMMKVSetBoolean(DNMMKVHandle handle, const uint8_t* key, size_t key_len
     auto* instance = value(handle);
     if (instance == nullptr || (input != 0 && input != 1)) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
-    if (key_view.empty()) return kInvalidArgument;
+    if (!validKey(key_view)) return kInvalidArgument;
     return instance->set(input != 0, key_view) ? kOk : writeFailure(instance);
   });
 }
@@ -335,7 +370,7 @@ int32_t DNMMKVSetNumber(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
     auto* instance = value(handle);
     if (instance == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
-    if (key_view.empty()) return kInvalidArgument;
+    if (!validKey(key_view)) return kInvalidArgument;
     return instance->set(input, key_view) ? kOk : writeFailure(instance);
   });
 }
@@ -345,7 +380,7 @@ int32_t DNMMKVSetInt64(DNMMKVHandle handle, const uint8_t* key, size_t key_len, 
     auto* instance = value(handle);
     if (instance == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
-    if (key_view.empty()) return kInvalidArgument;
+    if (!validKey(key_view)) return kInvalidArgument;
     return instance->set(input, key_view) ? kOk : writeFailure(instance);
   });
 }
@@ -356,7 +391,7 @@ int32_t DNMMKVSetBuffer(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
     auto* instance = value(handle);
     if (instance == nullptr || (input_len != 0 && input == nullptr)) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
-    if (key_view.empty()) return kInvalidArgument;
+    if (!validKey(key_view)) return kInvalidArgument;
     // MMKV copies the bytes into its mmap record synchronously. Borrow the
     // caller-owned scratch buffer for this call to avoid an intermediate
     // malloc+memcpy; this is the same zero-copy handoff used by RN MMKV.
@@ -371,7 +406,7 @@ int32_t DNMMKVGetString(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
     auto* instance = value(handle);
     if (instance == nullptr || output == nullptr || output_len == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
-    if (key_view.empty()) return kInvalidArgument;
+    if (!validKey(key_view)) return kInvalidArgument;
     recycleStringScratch();
     const auto status = getKeyStatus(instance->getString(key_view, g_string_scratch, true));
     const auto is_ascii = (status == kOk && isAsciiFast(g_string_scratch.data(), g_string_scratch.size()));
@@ -386,7 +421,7 @@ int32_t DNMMKVGetBoolean(DNMMKVHandle handle, const uint8_t* key, size_t key_len
     auto* instance = value(handle);
     if (instance == nullptr || output == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
-    if (key_view.empty()) return kInvalidArgument;
+    if (!validKey(key_view)) return kInvalidArgument;
     bool has_value = false;
     const auto result = instance->getBool(key_view, false, &has_value);
     const auto status = getKeyStatus(has_value);
@@ -400,7 +435,7 @@ int32_t DNMMKVGetNumber(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
     auto* instance = value(handle);
     if (instance == nullptr || output == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
-    if (key_view.empty()) return kInvalidArgument;
+    if (!validKey(key_view)) return kInvalidArgument;
     bool has_value = false;
     const auto result = instance->getDouble(key_view, 0.0, &has_value);
     const auto status = getKeyStatus(has_value);
@@ -414,7 +449,7 @@ int32_t DNMMKVGetInt64(DNMMKVHandle handle, const uint8_t* key, size_t key_len, 
     auto* instance = value(handle);
     if (instance == nullptr || output == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
-    if (key_view.empty()) return kInvalidArgument;
+    if (!validKey(key_view)) return kInvalidArgument;
     bool has_value = false;
     const auto result = instance->getInt64(key_view, 0, &has_value);
     const auto status = getKeyStatus(has_value);
@@ -429,7 +464,7 @@ int32_t DNMMKVGetBuffer(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
     auto* instance = value(handle);
     if (instance == nullptr || output == nullptr || output_len == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
-    if (key_view.empty()) return kInvalidArgument;
+    if (!validKey(key_view)) return kInvalidArgument;
     mmkv::MMBuffer result;
     const auto got_value = instance->getBytes(key_view, result);
     const auto status = getKeyStatus(got_value);
@@ -444,7 +479,7 @@ int32_t DNMMKVGetStringInto(DNMMKVHandle handle, const uint8_t* key, size_t key_
     auto* instance = value(handle);
     if (instance == nullptr || output_len == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
-    if (key_view.empty()) return kInvalidArgument;
+    if (!validKey(key_view)) return kInvalidArgument;
     recycleStringScratch();
     const auto status = getKeyStatus(instance->getString(key_view, g_string_scratch, true));
     const auto result = status == kOk
@@ -462,7 +497,7 @@ int32_t DNMMKVGetBufferInto(DNMMKVHandle handle, const uint8_t* key, size_t key_
     auto* instance = value(handle);
     if (instance == nullptr || output_len == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
-    if (key_view.empty()) return kInvalidArgument;
+    if (!validKey(key_view)) return kInvalidArgument;
     mmkv::MMBuffer result;
     const auto status = getKeyStatus(instance->getBytes(key_view, result));
     if (status != kOk) return status;
@@ -476,7 +511,7 @@ int32_t DNMMKVGetStringView(DNMMKVHandle handle, const uint8_t* key, size_t key_
     auto* instance = value(handle);
     if (instance == nullptr || output == nullptr || output_len == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
-    if (key_view.empty()) return kInvalidArgument;
+    if (!validKey(key_view)) return kInvalidArgument;
     recycleBufferScratch();
     const auto got_value = instance->getBytes(key_view, g_buffer_scratch);
     const auto status = getKeyStatus(got_value);
@@ -499,7 +534,7 @@ int32_t DNMMKVGetBufferView(DNMMKVHandle handle, const uint8_t* key, size_t key_
     auto* instance = value(handle);
     if (instance == nullptr || output == nullptr || output_len == nullptr) return kInvalidArgument;
     const auto key_view = toView(key, key_len);
-    if (key_view.empty()) return kInvalidArgument;
+    if (!validKey(key_view)) return kInvalidArgument;
     recycleBufferScratch();
     const auto got_value = instance->getBytes(key_view, g_buffer_scratch);
     const auto status = getKeyStatus(got_value);
@@ -518,7 +553,9 @@ int32_t DNMMKVContains(DNMMKVHandle handle, const uint8_t* key, size_t key_len) 
   return guarded([&] {
     auto* instance = value(handle);
     if (instance == nullptr) return kInvalidArgument;
-    return instance->containsKey(toView(key, key_len)) ? 1 : 0;
+    const auto key_view = toView(key, key_len);
+    if (!validKey(key_view)) return kInvalidArgument;
+    return instance->containsKey(key_view) ? 1 : 0;
   });
 }
 
@@ -576,11 +613,13 @@ int32_t DNMMKVRemove(DNMMKVHandle handle, const uint8_t* key, size_t key_len, in
   return guarded([&] {
     auto* instance = value(handle);
     if (instance == nullptr || removed == nullptr) return kInvalidArgument;
+    const auto key_view = toView(key, key_len);
+    if (!validKey(key_view)) return kInvalidArgument;
     if (instance->isReadOnly()) {
       *removed = 0;
       return kOk;
     }
-    *removed = instance->removeValueForKey(toView(key, key_len)) ? 1 : 0;
+    *removed = instance->removeValueForKey(key_view) ? 1 : 0;
     return kOk;
   });
 }
@@ -679,7 +718,7 @@ int32_t DNMMKVRecrypt(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
       return kInvalidArgument;
     }
     const size_t max_key_length = encryption_type == 2 ? 32 : 16;
-    if (key_string.size() > max_key_length) {
+    if (key_string.size() != max_key_length) {
       return kInvalidArgument;
     }
     const auto result = instance->reKey(key_string, encryption_type == 2) ? kOk : kIoError;
@@ -693,6 +732,7 @@ int32_t DNMMKVExists(const uint8_t* id, size_t id_len, const uint8_t* root_path,
     const auto id_string = toString(id, id_len);
     const auto root_string = toString(root_path, root_path_len);
     if (!validId(id_string)) return kInvalidArgument;
+    if (!validRootPath(root_string)) return kInvalidArgument;
     if (!ensureInitialized(root_string)) return kInvalidArgument;
     return NativeMMKV::checkExist(id_string, root_string.empty() ? nullptr : &root_string) ? 1 : 0;
   });
@@ -704,6 +744,7 @@ int32_t DNMMKVDelete(const uint8_t* id, size_t id_len, const uint8_t* root_path,
     const auto id_string = toString(id, id_len);
     const auto root_string = toString(root_path, root_path_len);
     if (!validId(id_string)) return kInvalidArgument;
+    if (!validRootPath(root_string)) return kInvalidArgument;
     if (!ensureInitialized(root_string)) return kInvalidArgument;
     std::lock_guard lock(g_instances_mutex);
     const auto key = instanceKey(id_string, root_string);
@@ -719,7 +760,7 @@ int32_t DNMMKVDelete(const uint8_t* id, size_t id_len, const uint8_t* root_path,
 int32_t DNMMKVSetDefaultRootPath(const uint8_t* path, size_t path_len) {
   return guarded([&] {
     const auto root = toString(path, path_len);
-    if (root.empty()) return kInvalidArgument;
+    if (root.empty() || !validRootPath(root)) return kInvalidArgument;
     NativeMMKV::initializeMMKV(root, kNativeLogNone);
     return kOk;
   });
@@ -735,10 +776,12 @@ int32_t DNMMKVProfileNoop(DNMMKVHandle, const uint8_t*, size_t, const uint8_t*, 
 
 int32_t DNMMKVProfileValidate(DNMMKVHandle handle, const uint8_t* key, size_t key_len,
                               const uint8_t* val, size_t val_len) {
-  auto* instance = value(handle);
-  if (instance == nullptr) return kInvalidArgument;
-  const auto key_view = toView(key, key_len);
-  if (key_view.empty()) return kInvalidArgument;
-  const auto val_view = toView(val, val_len);
-  return kOk;
+  return guarded([&] {
+    auto* instance = value(handle);
+    if (instance == nullptr) return kInvalidArgument;
+    const auto key_view = toView(key, key_len);
+    if (!validKey(key_view)) return kInvalidArgument;
+    static_cast<void>(toView(val, val_len));
+    return kOk;
+  });
 }

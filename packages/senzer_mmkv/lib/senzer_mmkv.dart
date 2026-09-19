@@ -104,21 +104,22 @@ final class MMKV implements Finalizable {
     required bool compareBeforeSet,
     required MMKVRecoveryStrategy? recoveryStrategy,
   }) {
-    if (id.isEmpty ||
-        id == '.' ||
-        id == '..' ||
-        id.contains('/') ||
-        id.contains('\\')) {
-      throw const MMKVException('id must be a non-empty filename-safe value.');
-    }
-    SenzerMMKVBindings.requireLoaded();
-    final idBytes = Uint8List.fromList(utf8.encode(id));
+    _validateInstanceId(id);
+    _validateRootPath(path);
+    final idBytes = utf8.encode(id);
     final pathBytes = path == null
         ? Uint8List(0)
-        : Uint8List.fromList(utf8.encode(path));
+        : utf8.encode(path);
     final keyBytes = encryptionKey == null
         ? Uint8List(0)
-        : Uint8List.fromList(utf8.encode(encryptionKey));
+        : utf8.encode(encryptionKey);
+    _validateEncryptionKey(
+      keyBytes.length,
+      encryptionKey,
+      encryptionType,
+      allowEmpty: true,
+    );
+    SenzerMMKVBindings.requireLoaded();
     final idPointer = SenzerMMKVBindings.allocateBytes(idBytes);
     final pathPointer = SenzerMMKVBindings.allocateBytes(pathBytes);
     final keyPointer = SenzerMMKVBindings.allocateBytes(keyBytes);
@@ -149,6 +150,7 @@ final class MMKV implements Finalizable {
         keyPointer
             .asTypedList(keyBytes.length)
             .fillRange(0, keyBytes.length, 0);
+        keyBytes.fillRange(0, keyBytes.length, 0);
       }
       calloc.free(keyPointer);
     }
@@ -500,8 +502,9 @@ final class MMKV implements Finalizable {
   void clearAll() {
     _ensureOpen();
     if (isReadOnly) return;
-    final shouldNotify =
-        MMKVListenerRegistry.hasListenersForScope(_listenerScope);
+    final shouldNotify = MMKVListenerRegistry.hasListenersForScope(
+      _listenerScope,
+    );
     final oldKeys = shouldNotify ? getAllKeys() : null;
     _runStatus(SenzerMMKVBindings.clear(_handle), 'clearAll');
     if (oldKeys != null) {
@@ -619,7 +622,13 @@ final class MMKV implements Finalizable {
     _ensureOpen();
     final key = encryptionKey == null
         ? Uint8List(0)
-        : Uint8List.fromList(utf8.encode(encryptionKey));
+        : utf8.encode(encryptionKey);
+    _validateEncryptionKey(
+      key.length,
+      encryptionKey,
+      encryptionType ?? MMKVEncryptionType.aes128,
+      allowEmpty: true,
+    );
     final pointer = SenzerMMKVBindings.allocateBytes(key);
     try {
       _runStatus(
@@ -636,6 +645,7 @@ final class MMKV implements Finalizable {
     } finally {
       if (key.isNotEmpty) {
         pointer.asTypedList(key.length).fillRange(0, key.length, 0);
+        key.fillRange(0, key.length, 0);
       }
       calloc.free(pointer);
     }
@@ -697,11 +707,9 @@ MMKV createMMKV({
 /// that need a shared app-group or extension directory can choose it before
 /// creating an instance.
 void initializeMMKV(String rootPath) {
-  if (rootPath.isEmpty) {
-    throw const MMKVException('rootPath must not be empty.');
-  }
+  _validateRootPath(rootPath, requireNonEmpty: true);
   SenzerMMKVBindings.requireLoaded();
-  final bytes = Uint8List.fromList(utf8.encode(rootPath));
+  final bytes = utf8.encode(rootPath);
   final pointer = SenzerMMKVBindings.allocateBytes(bytes);
   try {
     final status = SenzerMMKVBindings.setDefaultPath(pointer, bytes.length);
@@ -717,11 +725,13 @@ void initializeMMKV(String rootPath) {
 }
 
 bool existsMMKV(String id, {String? path}) {
+  _validateInstanceId(id);
+  _validateRootPath(path);
   SenzerMMKVBindings.requireLoaded();
-  final idBytes = Uint8List.fromList(utf8.encode(id));
+  final idBytes = utf8.encode(id);
   final pathBytes = path == null
       ? Uint8List(0)
-      : Uint8List.fromList(utf8.encode(path));
+      : utf8.encode(path);
   final idPointer = SenzerMMKVBindings.allocateBytes(idBytes);
   final pathPointer = SenzerMMKVBindings.allocateBytes(pathBytes);
   try {
@@ -742,11 +752,13 @@ bool existsMMKV(String id, {String? path}) {
 }
 
 bool deleteMMKV(String id, {String? path}) {
+  _validateInstanceId(id);
+  _validateRootPath(path);
   SenzerMMKVBindings.requireLoaded();
-  final idBytes = Uint8List.fromList(utf8.encode(id));
+  final idBytes = utf8.encode(id);
   final pathBytes = path == null
       ? Uint8List(0)
-      : Uint8List.fromList(utf8.encode(path));
+      : utf8.encode(path);
   final idPointer = SenzerMMKVBindings.allocateBytes(idBytes);
   final pathPointer = SenzerMMKVBindings.allocateBytes(pathBytes);
   try {
@@ -763,5 +775,50 @@ bool deleteMMKV(String id, {String? path}) {
   } finally {
     calloc.free(idPointer);
     calloc.free(pathPointer);
+  }
+}
+
+void _validateInstanceId(String id) {
+  if (id.isEmpty ||
+      id == '.' ||
+      id == '..' ||
+      id.contains('/') ||
+      id.contains('\\')) {
+    throw const MMKVException('id must be a non-empty filename-safe value.');
+  }
+  for (final codeUnit in id.codeUnits) {
+    if (codeUnit < 0x20 || codeUnit == 0x7f) {
+      throw const MMKVException('id must be a non-empty filename-safe value.');
+    }
+  }
+}
+
+void _validateRootPath(String? path, {bool requireNonEmpty = false}) {
+  if (requireNonEmpty && (path == null || path.isEmpty)) {
+    throw const MMKVException('rootPath must not be empty.');
+  }
+  if (path == null) return;
+  for (final codeUnit in path.codeUnits) {
+    if (codeUnit < 0x20 || codeUnit == 0x7f) {
+      throw const MMKVException(
+        'rootPath contains an unsafe control character.',
+      );
+    }
+  }
+}
+
+void _validateEncryptionKey(
+  int byteLength,
+  String? key,
+  MMKVEncryptionType type, {
+  bool allowEmpty = false,
+}) {
+  if (key == null || (allowEmpty && key.isEmpty)) return;
+  final expected = type == MMKVEncryptionType.aes128 ? 16 : 32;
+  if (byteLength != expected) {
+    throw MMKVException(
+      '${type == MMKVEncryptionType.aes128 ? 'AES-128' : 'AES-256'} '
+      'encryption keys must be exactly $expected UTF-8 bytes.',
+    );
   }
 }

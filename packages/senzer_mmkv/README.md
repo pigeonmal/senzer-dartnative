@@ -127,6 +127,18 @@ dn analyze
 dn run --release -d <android-device-or-emulator>
 ```
 
+The example also runs a deterministic adversarial suite before benchmarking.
+It probes path/filename injection, control and NUL characters, malformed
+UTF-16, SQL/shell/HTML-shaped strings, binary payloads from empty to 70 KiB,
+caller-owned buffer capacity errors, deterministic binary fuzz cases, NaN and
+infinite numbers, type confusion, listener re-entrancy, read-only behavior,
+deletion while sibling handles are open, encryption-key length enforcement, and
+64 native create/write/clear/close cycles. A native crash terminates the app and
+therefore fails the run; expected Dart-level validation errors are recorded as
+passes. The implementation is in
+[`example/lib/security_tests.dart`](example/lib/security_tests.dart), while
+host-only scratch-buffer and listener-churn tests live in `test/`.
+
 Use a physical iOS device for release benchmarking. DartNative's current iOS
 AOT builder intentionally rejects Release/Profile simulator builds; a
 simulator can still be used for non-release integration checks.

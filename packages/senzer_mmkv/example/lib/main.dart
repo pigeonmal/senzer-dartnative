@@ -2,6 +2,7 @@ import 'package:dartnative/dartnative.dart';
 
 import 'dartnative_plugin_registrant.dart';
 import 'integration_tests.dart';
+import 'security_tests.dart';
 import 'benchmarks/comparison_benchmark.dart';
 import 'benchmarks/path_profiler.dart';
 
@@ -41,6 +42,19 @@ final class _MMKVExampleAppState extends State<MMKVExampleApp> {
     });
     if (!report.passed) return;
 
+    final securityReport = await runMMKVSecurityTests();
+    if (!mounted) return;
+    setState(() {
+      _lines.add('');
+      _lines.add('Adversarial/security checks:');
+      _lines.addAll(securityReport.passedChecks.map((name) => '  PASS  $name'));
+      if (!securityReport.passed) {
+        _status = 'SECURITY FAIL: ${securityReport.failure}';
+        _lines.add('  FAIL  ${securityReport.failure}');
+      }
+    });
+    if (!securityReport.passed) return;
+
     final benchmarkStores = await runStorageBenchmarks();
     if (!mounted) return;
     setState(() {
@@ -67,9 +81,13 @@ final class _MMKVExampleAppState extends State<MMKVExampleApp> {
           '  Stage ${stage.stageNumber}: ${stage.name} -> ${stage.elapsedMs.toStringAsFixed(3)} ms (${stage.nanosPerOp.toStringAsFixed(1)} ns/op)',
         );
       }
-      _status = 'ALL PASS (${report.passedChecks.length} checks)';
+      _status =
+          'ALL PASS (${report.passedChecks.length + securityReport.passedChecks.length} checks)';
     });
-    print('[MMKV_TEST] ALL PASS ${report.passedChecks.length} checks');
+    print(
+      '[MMKV_TEST] ALL PASS '
+      '${report.passedChecks.length + securityReport.passedChecks.length} checks',
+    );
   }
 
   @override

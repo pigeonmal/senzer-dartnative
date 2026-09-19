@@ -7,6 +7,27 @@ void main() {
   test('validates instance ids before touching native code', () {
     expect(() => MMKV(id: '../private'), throwsA(isA<MMKVException>()));
     expect(() => MMKV(id: ''), throwsA(isA<MMKVException>()));
+    expect(() => MMKV(id: 'line\nbreak'), throwsA(isA<MMKVException>()));
+    expect(() => MMKV(id: 'nul\u0000byte'), throwsA(isA<MMKVException>()));
+    expect(
+      () => MMKV(id: 'valid', path: '/tmp/senzer\u0000mmkv'),
+      throwsA(isA<MMKVException>()),
+    );
+  });
+
+  test('validates encryption key byte lengths before loading native code', () {
+    expect(
+      () => MMKV(id: 'bad-aes128', encryptionKey: 'short'),
+      throwsA(isA<MMKVException>()),
+    );
+    expect(
+      () => MMKV(
+        id: 'bad-aes256',
+        encryptionKey: '0123456789abcdef',
+        encryptionType: MMKVEncryptionType.aes256,
+      ),
+      throwsA(isA<MMKVException>()),
+    );
   });
 
   test('exposes AES-128/AES-256 and recovery options', () {
